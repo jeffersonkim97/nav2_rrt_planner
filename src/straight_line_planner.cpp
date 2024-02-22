@@ -42,7 +42,7 @@
 #include <string>
 #include <memory>
 #include "nav2_util/node_utils.hpp"
-#incldue ""
+#include "rrt/rrt.h"
 
 #include "nav2_straightline_planner/straight_line_planner.hpp"
 
