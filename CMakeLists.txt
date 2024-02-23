@@ -58,14 +58,15 @@ ament_target_dependencies(${library_name}
 
 target_compile_definitions(${library_name} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
-add_executable(node_publisher src/rrt/node_publisher.cpp src/rrt/rrt.cpp)
+add_executable(node_publisher src/node_publisher.cpp src/rrt.cpp)
 ament_target_dependencies(node_publisher rclcpp std_msgs visualization_msgs)
 
 target_include_directories(node_publisher PUBLIC src/)
 
 pluginlib_export_plugin_description_file(nav2_core global_planner_plugin.xml)
 
-install(TARGETS ${library_name} node_publisher
+install(TARGETS ${library_name}
+  node_publisher
   DESTINATION lib/${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

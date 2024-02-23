@@ -1,4 +1,4 @@
-#include "rrt.h"
+#include "nav2_straightline_planner/rrt.h"
 #include <iostream>
 
 namespace rrt{
@@ -18,6 +18,15 @@ RRT::RRT(){
     root->position = startPos;
     lastNode = root;
     nodes.push_back(root);
+}
+
+void RRT::setStart(const geometry_msgs::msg::PoseStamped & start){
+    startPos.x() = start.pose.position.x;
+    startPos.y() = start.pose.position.y;
+}
+void RRT::setGoal(const geometry_msgs::msg::PoseStamped & goal){
+    endPos.x() = goal.pose.position.x;
+    endPos.y() = goal.pose.position.y;
 }
 
 Node* RRT::randomSample(){

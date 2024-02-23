@@ -10,6 +10,7 @@
 #include "constants.h"
 #include <stdio.h>
 #include <string.h>
+#include "geometry_msgs/msg/pose_stamped.hpp"
 // #include "obstacles.h"
 
 using namespace std;
@@ -28,6 +29,8 @@ class RRT{
     public:
         RRT();
         void initialize();
+        void setStart(const geometry_msgs::msg::PoseStamped & start);
+        void setGoal(const geometry_msgs::msg::PoseStamped & goal);
         Node* randomSample();
         Node* find_neighbor(Vector2f point);
         int distance(Vector2f &p, Vector2f &q);

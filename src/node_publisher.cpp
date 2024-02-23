@@ -2,7 +2,7 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include "rrt.h"
+#include "nav2_straightline_planner/rrt.h"
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -16,7 +16,7 @@ class RRTNodePublisher : public rclcpp::Node{
         : Node("rrt_node_publisher"), count_(0){
             publisher_line_list_ = this->create_publisher<visualization_msgs::msg::Marker>("rrt_nodes", 10);
             timer_ = this->create_wall_timer(
-                1000ms, std::bind(&RRTNodePublisher::rrt_callback, this)
+                5000ms, std::bind(&RRTNodePublisher::rrt_callback, this)
             );
         }
 
@@ -42,12 +42,28 @@ class RRTNodePublisher : public rclcpp::Node{
                 };
 
                 if (rrt.reached()){
-                    cout << "End Position: " << rrt.endPos << endl;
-                    cout << "Last RRT Node: " << rrt.lastNode->position << endl;
-                    cout << "Destination Reached \n";
+                    std::cout << "Path Found\n" << std::endl;
                     break;
                 };
             }
+            rrt::Node *qvertex;
+            if (rrt.reached()) {
+                qvertex = rrt.lastNode;
+            }
+            else
+            {
+                qvertex = rrt.find_neighbor(rrt.endPos);
+            }
+            // generate shortest path to destination.
+            int kek = 0;
+            while (qvertex != NULL) {
+                kek++;
+                // std::cout << "path q" << kek << ": (" << qvertex->position.x() << ", " << qvertex->position.y() << ")" << std::endl;
+                rrt.path.push_back(qvertex);
+                qvertex = qvertex->parent;
+            }
+
+            // std::cout << "path length: " << rrt.path.size() << std::endl;
 
             auto marker = visualization_msgs::msg::Marker();
             marker.header.stamp.sec = 0;
@@ -64,9 +80,26 @@ class RRTNodePublisher : public rclcpp::Node{
             marker.color.g = 1.0;
             marker.color.r = 1.0;
             visualization(&marker, rrt.root, 0);
-            RCLCPP_INFO(this->get_logger(), "Publishing");
+            RCLCPP_INFO(this->get_logger(), "Publishing RRT Nodes");
             publisher_line_list_->publish(marker);
 
+            auto path_marker = visualization_msgs::msg::Marker();
+            path_marker.header.stamp.sec = 0;
+            path_marker.header.stamp.nanosec = 0;
+            path_marker.header.frame_id="map";
+            path_marker.ns = "path_line";
+            path_marker.id = 1;
+            path_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+            path_marker.action = 0;
+            path_marker.pose = geometry_msgs::msg::Pose();
+            path_marker.scale.set__x(0.08);
+            path_marker.color.a = 1.0;
+            path_marker.color.b = 0.0;
+            path_marker.color.g = 1.0;
+            path_marker.color.r = 0.0;
+            path_visualization(&path_marker, rrt.lastNode);
+            RCLCPP_INFO(this->get_logger(), "Publishing RRT Path");
+            publisher_line_list_->publish(path_marker);
         };
 
         void visualization(visualization_msgs::msg::Marker *marker, rrt::Node *parent, int depth){
@@ -94,6 +127,31 @@ class RRTNodePublisher : public rclcpp::Node{
                 visualization(marker, child, depth + 1);
             }
 
+        };
+
+        void path_visualization(visualization_msgs::msg::Marker *marker, rrt::Node *child){
+            // std::cout << "Child:" << std::endl;
+            auto point_child = geometry_msgs::msg::Point();
+            point_child.x = child->position.x();
+            point_child.y = child->position.y();
+            point_child.z = 0;
+            // std::cout << "Child Pos: (" << point_child.x << ", " << point_child.y << ")"<< std::endl;
+
+
+            rrt::Node *parent = child->parent;
+            if (parent == NULL) {
+                return;
+            }
+            // std::cout << "Parent:" << std::endl;
+            auto point_parent = geometry_msgs::msg::Point();
+            point_parent.x = parent->position.x();
+            point_parent.y = parent->position.y();
+            point_parent.z = 0;
+            // std::cout << "Parent Pos: (" << point_parent.x << ", " << point_parent.y << ")"<< std::endl;
+            marker->points.push_back(point_child);
+            marker->points.push_back(point_parent);
+            // std::cout << "Next" << std::endl;
+            path_visualization(marker, parent);
         };
         rclcpp::TimerBase::SharedPtr timer_;
         rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_line_list_;
