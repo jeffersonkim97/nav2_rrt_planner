@@ -17,11 +17,12 @@
 #include "rrt.h"
 #include <visualization_msgs/msg/marker.hpp>
 
+
 // ADDED
 
 namespace nav2_straightline_planner {
 
-class StraightLine : public nav2_core::GlobalPlanner /*, rclcpp::Node*/ {
+class StraightLine : public nav2_core::GlobalPlanner , rclcpp::Node {
 public:
     StraightLine();
     ~StraightLine() = default;

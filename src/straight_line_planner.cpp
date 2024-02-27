@@ -1,5 +1,6 @@
 #include "nav2_straightline_planner/straight_line_planner.hpp"
 //#include "nav2_costmap_2d/costmap_2d.hpp"
+#include "nav2_costmap_2d/costmap_2d.hpp"
 #include "nav2_costmap_2d/footprint.hpp"
 #include "nav2_straightline_planner/rrt.h"
 #include "nav2_util/node_utils.hpp"
@@ -15,9 +16,9 @@
 namespace nav2_straightline_planner {
 
 StraightLine::StraightLine()
-    //: Node("rrt_node_publisher")
+    : Node("rrt_node_publisher")
 {
-    //publisher_line_list_ = this->create_publisher<visualization_msgs::msg::Marker>("rrt_nodes", 10);
+    publisher_line_list_ = this->create_publisher<visualization_msgs::msg::Marker>("rrt_nodes", 10);
 }
 
 void StraightLine::configure(
@@ -47,13 +48,35 @@ void StraightLine::configure(
     node_->get_parameter(name_ + ".interpolation_resolution", interpolation_resolution_);
 
     std::cout << "Configured" << std::endl;
-
+    
     // Initialize collision checker
-    collision_checker_ = std::make_shared<GridCollisionChecker> (costmap_ros->getCostmap(), 72, node_);
-    collision_checker_->setFootprint(
-        nav2_costmap_2d::makeFootprintFromRadius(10),
-        true,
-        0.0);
+    collision_checker_ = std::make_shared<GridCollisionChecker> (costmap_ros->getCostmap(), 72 /*1*/, node_);
+    std::cout << "------Initialized Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
+    //collision_checker_->setFootprint(nav2_costmap_2d::makeFootprintFromRadius(1), true, 0.0);
+    collision_checker_->setFootprint(costmap_ros->getRobotFootprint(), true, 0.0);
+
+    std::cout << "Robot footprint: " << costmap_ros->getRobotFootprint().size() << std::endl;
+    
+    /*
+    std::cout << "collision_checker online" << std::endl;
+
+    std::cout << "Costmap Resolution: " << costmap_ros->getCostmap()->getResolution() << std::endl;
+    std::cout << "Costmap Index of (0,0): " << costmap_ros->getCostmap()->getIndex(0,0) << std::endl;
+    std::cout << "Costmap Origin of X: " << costmap_ros->getCostmap()->getOriginX() << std::endl;
+    std::cout << "Costmap Origin of Y: " << costmap_ros->getCostmap()->getOriginY()<< std::endl;
+
+    std::cout << "Costmap Size x: " << costmap_ros->getCostmap()->getSizeInCellsX() << std::endl;
+    std::cout << "Costmap Size y: " << costmap_ros->getCostmap()->getSizeInCellsX() << std::endl;
+
+    std::cout << "Costmap Cost: " << std::endl;
+    for (unsigned int ii = 0; ii < costmap_ros->getCostmap()->getSizeInCellsX(); ii++){
+        for (unsigned int jj = 0; jj < costmap_ros->getCostmap()->getSizeInCellsY(); jj++){
+            unsigned int indexCostmap = costmap_ros->getCostmap()->getIndex(ii, jj);
+            if (std::isprint(costmap_ros->getCostmap()->getCost(indexCostmap)) > 0){
+                std::cout << "Cost (" << ii << ", " << jj << "): " << std::isprint(costmap_ros->getCostmap()->getCost(indexCostmap)) << std::endl;
+            }
+        }
+    }*/
 }
 
 void StraightLine::cleanup()
@@ -102,29 +125,86 @@ nav_msgs::msg::Path StraightLine::createPlan(
     global_path.poses.clear();
     global_path.header.stamp = node_->now();
     global_path.header.frame_id = global_frame_;
+
     // Run RRT
     rrt::RRT rrt;
     rrt.setStart(start);
-    // IF goal is invalid:
+
+    /*
+    std::cout << "Costmap Resolution: " << collision_checker_->getCostmap()->getResolution() << std::endl;
+    std::cout << "Costmap Index of (0,0): " << collision_checker_->getCostmap()->getIndex(0,0) << std::endl;
+    std::cout << "Costmap Origin of X: " << collision_checker_->getCostmap()->getOriginX() << std::endl;
+    std::cout << "Costmap Origin of Y: " << collision_checker_->getCostmap()->getOriginY()<< std::endl;
+
+    std::cout << "Costmap Size x: " << collision_checker_->getCostmap()->getSizeInCellsX() << std::endl;
+    std::cout << "Costmap Size y: " << collision_checker_->getCostmap()->getSizeInCellsX() << std::endl;
+    */
+
+    std::cout << "Costmap Cost " << std::endl;
+    for (unsigned int ii = 0; ii < collision_checker_->getCostmap()->getSizeInCellsX(); ii++){
+        for (unsigned int jj = 0; jj < collision_checker_->getCostmap()->getSizeInCellsY(); jj++){
+            unsigned int indexCostmap = collision_checker_->getCostmap()->getIndex(ii, jj);
+            if (std::isprint(collision_checker_->getCostmap()->getCost(indexCostmap)) > 0){
+                std::cout << "Cost (" << ii << ", " << jj << "): " << std::isprint(collision_checker_->getCostmap()->getCost(indexCostmap)) << std::endl;
+            }
+        }
+    }
+
+    // nav2_costmap_2d::Costmap2D * thisCostmap = collision_checker_->getCostmap();
+
+    // for (size_t ii = 0; ii < sizeof(collision_checker_->getCostmap()); ii++){
+    //     std::cout << "Costmap [" << ii << "]: " << thisCostmap[ii] << std::endl;
+    // }
+
+    // // Costmap
+    // nav2_costmap_2d::Costmap2D * costmap_ = new nav2_costmap_2d::Costmap2D(100, 100, 0.1, 0, 0, 0);
     
-    if (collision_checker_->inCollision(goal.pose.position.x, goal.pose.position.y, 0, true)){
+    // for (unsigned int i = 40; i<=60; ++i) {
+    //     for (unsigned int j = 40; j<=60; ++i){
+    //         costmap_->setCost(i,j,128);
+    //     }
+    // }
+
+    // nav2_straightline_planner::GridCollisionChecker collision_checker(costmap_, 72, node_);
+
+    // collision_checker.inCollision(50, 50, 0.0, false);
+    // float cost = collision_checker.getCost();
+
+
+    
+    std::cout << "------Inline Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
+
+
+    unsigned int mx, my;
+    collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my) ;
+    std::cout << "(mx, my): (" << mx << ", " << my << ")" << std::endl;
+    std::cout << "Collision?: " << collision_checker_->inCollision(mx, my, 0, true) << std::endl;
+    std::cout << "Cost at mx, my: " << std::isprint(collision_checker_->getCostmap()->getCost(mx, my)) << std::endl;
+
+
+    // IF goal is invalid:
+    if (collision_checker_->inCollision(mx, my, 0, true)){
         RCLCPP_INFO(
             node_->get_logger(), "Invalid Goal");
         return global_path;
         std::cout << "Invalid" << std::endl;
     }
     
-    std::cout << "Cost: " << collision_checker_->getCost() << std::endl;
-
     rrt.setGoal(goal);
     
-    std::cout << "New Start: (" << rrt.root->position.x() << ", " << rrt.root->position.y() << ")" << std::endl;
-    std::cout << "New Goal: (" << rrt.endPos.x() << ", " << rrt.endPos.y() << ")" << std::endl;
-
     int max_iter = rrt.max_iter;
     for (int i = 0; i < max_iter; i++) {
         rrt::Node* q = rrt.randomSample(start, goal);
         if (q != NULL) {
+            // Convert intermediate world coord into map coord
+            unsigned int mqx, mqy;
+            collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mqx, mqy);
+
+            // Now check collision
+            bool collision_detected = collision_checker_->inCollision(mx, my, 0, true);
+
+            if (!collision_detected){
+
             rrt::Node* qnear = rrt.find_neighbor(q->position);
             if (rrt.distance(q->position, qnear->position) > rrt.step_size) {
                 Vector2d qnew_pos = rrt.extend(q, qnear);
@@ -135,6 +215,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
                 rrt::Node* qnew = new rrt::Node;
                 qnew->position = q->position;
                 rrt.add(qnear, qnew);
+            };
             };
         };
 
