@@ -8,6 +8,8 @@
 #include <cmath>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <memory>
+#include <nav_msgs/msg/detail/occupancy_grid__struct.hpp>
+#include <rclcpp/time.hpp>
 #include <string>
 #include <visualization_msgs/msg/marker.hpp>
 
@@ -18,7 +20,6 @@ namespace nav2_straightline_planner {
 StraightLine::StraightLine()
     : Node("rrt_node_publisher")
 {
-    publisher_line_list_ = this->create_publisher<visualization_msgs::msg::Marker>("rrt_nodes", 10);
 }
 
 void StraightLine::configure(
@@ -26,20 +27,14 @@ void StraightLine::configure(
     std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
-    std::cout << "Configuring" << std::endl;
     node_ = parent.lock();
     name_ = name;
     tf_ = tf;
 
     publisher_line_list_ = node_->create_publisher<visualization_msgs::msg::Marker>("rrt_nodes", 10);
+    publisher_costmap_time = node_->create_publisher<nav_msgs::msg::OccupancyGrid>("costmap_time", 10);
 
-    std::cout << "name: " << name << std::endl;
-    std::cout << "tf: " << tf << std::endl;
-
-
-    std::cout << "costmap_ locked parent" << std::endl;
     costmap_ros_ = costmap_ros;
-    std::cout << "costmap_ros: " << costmap_ros_ << std::endl;
     global_frame_ = costmap_ros->getGlobalFrameID();
 
     // Parameter initialization
@@ -47,36 +42,9 @@ void StraightLine::configure(
         node_, name_ + ".interpolation_resolution", rclcpp::ParameterValue(0.1));
     node_->get_parameter(name_ + ".interpolation_resolution", interpolation_resolution_);
 
-    std::cout << "Configured" << std::endl;
-    
     // Initialize collision checker
-    collision_checker_ = std::make_shared<GridCollisionChecker> (costmap_ros->getCostmap(), 72 /*1*/, node_);
-    std::cout << "------Initialized Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
-    //collision_checker_->setFootprint(nav2_costmap_2d::makeFootprintFromRadius(1), true, 0.0);
+    collision_checker_ = std::make_shared<GridCollisionChecker> (costmap_ros->getCostmap(), 72, node_);
     collision_checker_->setFootprint(costmap_ros->getRobotFootprint(), true, 0.0);
-
-    std::cout << "Robot footprint: " << costmap_ros->getRobotFootprint().size() << std::endl;
-    
-    /*
-    std::cout << "collision_checker online" << std::endl;
-
-    std::cout << "Costmap Resolution: " << costmap_ros->getCostmap()->getResolution() << std::endl;
-    std::cout << "Costmap Index of (0,0): " << costmap_ros->getCostmap()->getIndex(0,0) << std::endl;
-    std::cout << "Costmap Origin of X: " << costmap_ros->getCostmap()->getOriginX() << std::endl;
-    std::cout << "Costmap Origin of Y: " << costmap_ros->getCostmap()->getOriginY()<< std::endl;
-
-    std::cout << "Costmap Size x: " << costmap_ros->getCostmap()->getSizeInCellsX() << std::endl;
-    std::cout << "Costmap Size y: " << costmap_ros->getCostmap()->getSizeInCellsX() << std::endl;
-
-    std::cout << "Costmap Cost: " << std::endl;
-    for (unsigned int ii = 0; ii < costmap_ros->getCostmap()->getSizeInCellsX(); ii++){
-        for (unsigned int jj = 0; jj < costmap_ros->getCostmap()->getSizeInCellsY(); jj++){
-            unsigned int indexCostmap = costmap_ros->getCostmap()->getIndex(ii, jj);
-            if (std::isprint(costmap_ros->getCostmap()->getCost(indexCostmap)) > 0){
-                std::cout << "Cost (" << ii << ", " << jj << "): " << std::isprint(costmap_ros->getCostmap()->getCost(indexCostmap)) << std::endl;
-            }
-        }
-    }*/
 }
 
 void StraightLine::cleanup()
@@ -104,6 +72,112 @@ nav_msgs::msg::Path StraightLine::createPlan(
     const geometry_msgs::msg::PoseStamped& start,
     const geometry_msgs::msg::PoseStamped& goal)
 {
+    // create custom cost map with time dependent part
+    nav_msgs::msg::OccupancyGrid msg;
+    nav2_costmap_2d::Costmap2D * map = this->costmap_ros_->getCostmap();
+    int m = map->getSizeInCellsX();
+    int n = map->getSizeInCellsY();
+    std::vector<int8_t> data;
+    auto now = node_->get_clock()->now();
+    for (int i=0;i<n*m;i++) {
+        data.push_back(map->getCost(i));
+    }
+
+    
+    // Place camera
+    double ax, ay;
+    ax = 2.0;
+    ay = 0.0;
+
+    // Camera Setting
+    double range = 2;
+    double pan_speed = 0.25;
+    double half_fov = (M_PI/180)*30;
+    double pan_init = 0; // Initial Pan angle
+    Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
+                        
+    // Output Camera Position with camera range 0.5
+    double  cam_r = 0.1;
+    int cam_bound_n = 100;
+    vector<Vector2d> cam_bound;
+    for (int i = 0; i < cam_bound_n; i++){
+        double angi = 2*M_PI/cam_bound_n*i;
+        Vector2d bound_coord(ax+cam_r*cos(angi), ay+cam_r*sin(angi));
+        cam_bound.push_back(bound_coord);
+    }
+
+    // Costmap for camera boundary
+    for (int im=0; im<m; im++){
+        for (int in=0; in<n; in++){
+            for (int i = 0; i < cam_bound_n; i++) {
+                Vector2d temp = cam_bound[i];
+                unsigned int mxi, myi;
+                collision_checker_->getCostmap()->worldToMap(temp.x(), temp.y(), mxi, myi);
+                int cam_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
+                data[cam_ind] = 100*(int(now.seconds()));
+
+            }
+        }
+    
+    } 
+
+    std::cout << "Period: " << 2*M_PI/pan_speed << std::endl;
+    std::cout << "round down: " << std::floor(now.seconds() / (2*M_PI/pan_speed)) << std::endl;
+    std::cout << "subtracted: " << now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed)) << std::endl;
+
+    // Costmap for camera FOV
+    Vector2d abar(ax, ay);
+    Vector2d cbar;
+    double period = 2*M_PI/pan_speed;
+    
+    for (int im=0; im<m; im++){
+        for (int in=0; in<n; in++){
+            // if b = (wxi, wyi),
+            // find all b s.t. |b-a| < r and |theta| < r
+            double wxi, wyi;
+            collision_checker_->getCostmap()->mapToWorld(im, in, wxi, wyi);
+            Vector2d bbar(wxi, wyi);
+            Vector2d pbar = bbar - abar;
+
+            // Update cbar over time
+            double ti = now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed));
+            // std::cout << "Scaled Time: " << ti << std::endl;
+            // std::cout << "theta: " << pan_init + pan_speed*ti << std::endl;
+            cbar.x() = cbarInit.norm()*cos(pan_init + pan_speed*ti);
+            cbar.y() = cbarInit.norm()*sin(pan_init + pan_speed*ti);
+            std::cout << "x, y: (" << cbar.x() << ", " << cbar.y() << ")" << std::endl;
+            std::cout << "Cbar, Cbarinit: " << cbar.norm() << ", " << cbarInit.norm() << std::endl;
+
+            // Calculate conditoin
+            bool inRange = pbar.norm() < range;
+            double dot_product = pbar.x()*cbar.x() + pbar.y()*cbar.y();
+            double ang = acos(dot_product/pbar.norm());
+            bool inAng = abs(ang) <= half_fov;
+            
+            if (inRange && inAng) {
+                unsigned int mxi, myi;
+                collision_checker_->getCostmap()->worldToMap(wxi, wyi, mxi, myi);
+                int fov_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
+                data[fov_ind] = 100*(int(now.seconds()));
+            }
+        }
+    }
+
+    // Initialize collision checker for time map:
+    time_checker_ = std::make_shared<GridCollisionChecker> (nav2_costmap_2d::Costmap2D(msg), 72, node_);
+
+
+    msg.header.frame_id = "map";
+    msg.header.stamp = now;
+    msg.data = data;
+    msg.info.width = m;
+    msg.info.height = n;
+    msg.info.resolution = map->getResolution();
+    msg.info.map_load_time = node_->get_clock()->now();
+    msg.info.origin.position.x = map->getOriginX();
+    msg.info.origin.position.y = map->getOriginY();
+    this->publisher_costmap_time->publish(msg);
+
     std::cout << "Creating Plan" << std::endl;
     nav_msgs::msg::Path global_path;
 
@@ -130,50 +204,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
     rrt::RRT rrt;
     rrt.setStart(start);
 
-    /*
-    std::cout << "Costmap Resolution: " << collision_checker_->getCostmap()->getResolution() << std::endl;
-    std::cout << "Costmap Index of (0,0): " << collision_checker_->getCostmap()->getIndex(0,0) << std::endl;
-    std::cout << "Costmap Origin of X: " << collision_checker_->getCostmap()->getOriginX() << std::endl;
-    std::cout << "Costmap Origin of Y: " << collision_checker_->getCostmap()->getOriginY()<< std::endl;
-
-    std::cout << "Costmap Size x: " << collision_checker_->getCostmap()->getSizeInCellsX() << std::endl;
-    std::cout << "Costmap Size y: " << collision_checker_->getCostmap()->getSizeInCellsX() << std::endl;
-    */
-
-    std::cout << "Costmap Cost " << std::endl;
-    for (unsigned int ii = 0; ii < collision_checker_->getCostmap()->getSizeInCellsX(); ii++){
-        for (unsigned int jj = 0; jj < collision_checker_->getCostmap()->getSizeInCellsY(); jj++){
-            unsigned int indexCostmap = collision_checker_->getCostmap()->getIndex(ii, jj);
-            if (std::isprint(collision_checker_->getCostmap()->getCost(indexCostmap)) > 0){
-                std::cout << "Cost (" << ii << ", " << jj << "): " << std::isprint(collision_checker_->getCostmap()->getCost(indexCostmap)) << std::endl;
-            }
-        }
-    }
-
-    // nav2_costmap_2d::Costmap2D * thisCostmap = collision_checker_->getCostmap();
-
-    // for (size_t ii = 0; ii < sizeof(collision_checker_->getCostmap()); ii++){
-    //     std::cout << "Costmap [" << ii << "]: " << thisCostmap[ii] << std::endl;
-    // }
-
-    // // Costmap
-    // nav2_costmap_2d::Costmap2D * costmap_ = new nav2_costmap_2d::Costmap2D(100, 100, 0.1, 0, 0, 0);
-    
-    // for (unsigned int i = 40; i<=60; ++i) {
-    //     for (unsigned int j = 40; j<=60; ++i){
-    //         costmap_->setCost(i,j,128);
-    //     }
-    // }
-
-    // nav2_straightline_planner::GridCollisionChecker collision_checker(costmap_, 72, node_);
-
-    // collision_checker.inCollision(50, 50, 0.0, false);
-    // float cost = collision_checker.getCost();
-
-
-    
     std::cout << "------Inline Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
-
 
     unsigned int mx, my;
     collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my) ;

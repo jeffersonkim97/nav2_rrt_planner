@@ -3,6 +3,7 @@
 #define NAV2_STRAIGHTLINE_PLANNER__STRAIGHT_LINE_PLANNER_HPP_
 
 #include <memory>
+#include <nav_msgs/msg/detail/occupancy_grid__struct.hpp>
 #include <string>
 //#include "rclcpp/rclcpp.hpp"
 //#include "geometry_msgs/msg/point.hpp"
@@ -16,6 +17,7 @@
 #include "nav2_util/lifecycle_node.hpp"
 #include "rrt.h"
 #include <visualization_msgs/msg/marker.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
 
 
 // ADDED
@@ -70,6 +72,7 @@ private:
 
     double interpolation_resolution_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_line_list_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher_costmap_time;
 };
 
 } // namespace nav2_straightline_planner
