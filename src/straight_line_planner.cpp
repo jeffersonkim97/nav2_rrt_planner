@@ -72,6 +72,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
     const geometry_msgs::msg::PoseStamped& start,
     const geometry_msgs::msg::PoseStamped& goal)
 {
+    
     // create custom cost map with time dependent part
     nav_msgs::msg::OccupancyGrid msg;
     nav2_costmap_2d::Costmap2D * map = this->costmap_ros_->getCostmap();
@@ -86,12 +87,12 @@ nav_msgs::msg::Path StraightLine::createPlan(
     
     // Place camera
     double ax, ay;
-    ax = 2.0;
+    ax = 3.0;
     ay = 0.0;
 
     // Camera Setting
-    double range = 2;
-    double pan_speed = 0.25;
+    double range = 1.5;
+    double pan_speed = 0.1;
     double half_fov = (M_PI/180)*30;
     double pan_init = 0; // Initial Pan angle
     Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
@@ -120,11 +121,6 @@ nav_msgs::msg::Path StraightLine::createPlan(
         }
     
     } 
-
-    std::cout << "Period: " << 2*M_PI/pan_speed << std::endl;
-    std::cout << "round down: " << std::floor(now.seconds() / (2*M_PI/pan_speed)) << std::endl;
-    std::cout << "subtracted: " << now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed)) << std::endl;
-
     // Costmap for camera FOV
     Vector2d abar(ax, ay);
     Vector2d cbar;
@@ -141,12 +137,8 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
             // Update cbar over time
             double ti = now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed));
-            // std::cout << "Scaled Time: " << ti << std::endl;
-            // std::cout << "theta: " << pan_init + pan_speed*ti << std::endl;
             cbar.x() = cbarInit.norm()*cos(pan_init + pan_speed*ti);
             cbar.y() = cbarInit.norm()*sin(pan_init + pan_speed*ti);
-            std::cout << "x, y: (" << cbar.x() << ", " << cbar.y() << ")" << std::endl;
-            std::cout << "Cbar, Cbarinit: " << cbar.norm() << ", " << cbarInit.norm() << std::endl;
 
             // Calculate conditoin
             bool inRange = pbar.norm() < range;
@@ -163,10 +155,6 @@ nav_msgs::msg::Path StraightLine::createPlan(
         }
     }
 
-    // Initialize collision checker for time map:
-    time_checker_ = std::make_shared<GridCollisionChecker> (nav2_costmap_2d::Costmap2D(msg), 72, node_);
-
-
     msg.header.frame_id = "map";
     msg.header.stamp = now;
     msg.data = data;
@@ -177,6 +165,17 @@ nav_msgs::msg::Path StraightLine::createPlan(
     msg.info.origin.position.x = map->getOriginX();
     msg.info.origin.position.y = map->getOriginY();
     this->publisher_costmap_time->publish(msg);
+
+    // Build new time map into nav2_costmap_2d
+    std::cout << "Build costmap for time" << std::endl;
+    costmap_time_ = nav2_costmap_2d::Costmap2D(msg);
+
+    // Initialize collision checker for time map:
+    time_checker_ = std::make_shared<GridCollisionChecker> (& costmap_time_, 72, node_);
+    time_checker_->setFootprint(this->costmap_ros_->getRobotFootprint(), true, 0.0);
+    std::cout << "Time Costmap getCost(): " << time_checker_->getCost() << std::endl;
+    std::cout << "Time Costmap Collision at (0,0): " << time_checker_->inCollision(0, 0, 0, true) << std::endl;
+
 
     std::cout << "Creating Plan" << std::endl;
     nav_msgs::msg::Path global_path;
@@ -207,14 +206,10 @@ nav_msgs::msg::Path StraightLine::createPlan(
     std::cout << "------Inline Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
 
     unsigned int mx, my;
-    collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my) ;
-    std::cout << "(mx, my): (" << mx << ", " << my << ")" << std::endl;
-    std::cout << "Collision?: " << collision_checker_->inCollision(mx, my, 0, true) << std::endl;
-    std::cout << "Cost at mx, my: " << std::isprint(collision_checker_->getCostmap()->getCost(mx, my)) << std::endl;
-
-
+    collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
+    
     // IF goal is invalid:
-    if (collision_checker_->inCollision(mx, my, 0, true)){
+    if (collision_checker_->inCollision(mx, my, 0, true) && time_checker_->inCollision(mx, my, 0, true)){
         RCLCPP_INFO(
             node_->get_logger(), "Invalid Goal");
         return global_path;
@@ -233,8 +228,11 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
             // Now check collision
             bool collision_detected = collision_checker_->inCollision(mx, my, 0, true);
+            bool collision_time_detected = time_checker_->inCollision(mx, my, 0, true);
+            std::cout << "Time Collision: " << collision_time_detected << std::endl;
 
-            if (!collision_detected){
+            // if (!collision_detected && collision_time_detected){
+            if (!collision_detected && !collision_time_detected){
 
             rrt::Node* qnear = rrt.find_neighbor(q->position);
             if (rrt.distance(q->position, qnear->position) > rrt.step_size) {

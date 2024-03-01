@@ -56,6 +56,9 @@ private:
     // Collision Checker
     std::shared_ptr<GridCollisionChecker> collision_checker_;
 
+    // Time Checker
+    std::shared_ptr<GridCollisionChecker> time_checker_;
+
     // TF buffer
     std::shared_ptr<tf2_ros::Buffer> tf_;
 
@@ -65,6 +68,10 @@ private:
     // Global Costmap
     //nav2_costmap_2d::Costmap2D* costmap_; 
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
+
+    //nav2_costmap_2d::Costmap2D* costmap_; 
+    // std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_time_;
+    nav2_costmap_2d::Costmap2D costmap_time_;
     
 
     // The global frame of the costmap
