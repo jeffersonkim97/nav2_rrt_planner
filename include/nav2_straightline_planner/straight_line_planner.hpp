@@ -44,6 +44,8 @@ public:
     // plugin deactivate
     void deactivate() override;
 
+    // nav2_msgs::msg::OccupancyGrid build_timemap(double x, double y, double range, double pan_speed, double half_fov_deg, double pan_init, double cam_r);
+
     // This method creates path for given start and goal pose.
     nav_msgs::msg::Path createPlan(
         const geometry_msgs::msg::PoseStamped& start,

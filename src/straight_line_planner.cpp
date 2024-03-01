@@ -68,11 +68,97 @@ void StraightLine::deactivate()
         name_.c_str());
 }
 
+// nav2_msgs::msg::OccupancyGrid StraightLine::build_timemap(double ax, double ay, double range, double pan_speed, double half_fov_deg, double pan_init, double cam_r){
+//      // create custom cost map with time dependent part
+//     nav_msgs::msg::OccupancyGrid msg;
+//     nav2_costmap_2d::Costmap2D * map = this->costmap_ros_->getCostmap();
+//     int m = map->getSizeInCellsX();
+//     int n = map->getSizeInCellsY();
+//     std::vector<int8_t> data;
+//     auto now = node_->get_clock()->now();
+//     for (int i=0;i<n*m;i++) {
+//         data.push_back(map->getCost(i));
+//     }
+
+//     // Camera Setting
+//     double half_fov = (M_PI/180)*half_fov;
+//     Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
+                        
+//     // Output Camera Position with camera range 0.5
+//     int cam_bound_n = 100;
+//     vector<Vector2d> cam_bound;
+//     for (int i = 0; i < cam_bound_n; i++){
+//         double angi = 2*M_PI/cam_bound_n*i;
+//         Vector2d bound_coord(ax+cam_r*cos(angi), ay+cam_r*sin(angi));
+//         cam_bound.push_back(bound_coord);
+//     }
+
+//     // Costmap for camera boundary
+//     for (int im=0; im<m; im++){
+//         for (int in=0; in<n; in++){
+//             for (int i = 0; i < cam_bound_n; i++) {
+//                 Vector2d temp = cam_bound[i];
+//                 unsigned int mxi, myi;
+//                 collision_checker_->getCostmap()->worldToMap(temp.x(), temp.y(), mxi, myi);
+//                 int cam_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
+//                 data[cam_ind] = 100*(int(now.seconds()));
+
+//             }
+//         }
+    
+//     } 
+//     // Costmap for camera FOV
+//     Vector2d abar(ax, ay);
+//     Vector2d cbar;
+//     double period = 2*M_PI/pan_speed;
+    
+//     for (int im=0; im<m; im++){
+//         for (int in=0; in<n; in++){
+//             // if b = (wxi, wyi),
+//             // find all b s.t. |b-a| < r and |theta| < r
+//             double wxi, wyi;
+//             collision_checker_->getCostmap()->mapToWorld(im, in, wxi, wyi);
+//             Vector2d bbar(wxi, wyi);
+//             Vector2d pbar = bbar - abar;
+
+//             // Update cbar over time
+//             double ti = now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed));
+//             cbar.x() = cbarInit.norm()*cos(pan_init + pan_speed*ti);
+//             cbar.y() = cbarInit.norm()*sin(pan_init + pan_speed*ti);
+
+//             // Calculate conditoin
+//             bool inRange = pbar.norm() < range;
+//             double dot_product = pbar.x()*cbar.x() + pbar.y()*cbar.y();
+//             double ang = acos(dot_product/pbar.norm());
+//             bool inAng = abs(ang) <= half_fov;
+            
+//             if (inRange && inAng) {
+//                 unsigned int mxi, myi;
+//                 collision_checker_->getCostmap()->worldToMap(wxi, wyi, mxi, myi);
+//                 int fov_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
+//                 data[fov_ind] = 100*(int(now.seconds()));
+//             }
+//         }
+//     }
+
+//     msg.header.frame_id = "map";
+//     msg.header.stamp = now;
+//     msg.data = data;
+//     msg.info.width = m;
+//     msg.info.height = n;
+//     msg.info.resolution = map->getResolution();
+//     msg.info.map_load_time = node_->get_clock()->now();
+//     msg.info.origin.position.x = map->getOriginX();
+//     msg.info.origin.position.y = map->getOriginY();
+//     this->publisher_costmap_time->publish(msg);
+
+//     return msg;
+// }
+
 nav_msgs::msg::Path StraightLine::createPlan(
     const geometry_msgs::msg::PoseStamped& start,
     const geometry_msgs::msg::PoseStamped& goal)
 {
-    
     // create custom cost map with time dependent part
     nav_msgs::msg::OccupancyGrid msg;
     nav2_costmap_2d::Costmap2D * map = this->costmap_ros_->getCostmap();
@@ -92,9 +178,9 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
     // Camera Setting
     double range = 1.5;
-    double pan_speed = 0.1;
+    double pan_speed = 0.00000001;
     double half_fov = (M_PI/180)*30;
-    double pan_init = 0; // Initial Pan angle
+    double pan_init = (M_PI/180)*180; // Initial Pan angle
     Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
                         
     // Output Camera Position with camera range 0.5
@@ -167,16 +253,13 @@ nav_msgs::msg::Path StraightLine::createPlan(
     this->publisher_costmap_time->publish(msg);
 
     // Build new time map into nav2_costmap_2d
-    std::cout << "Build costmap for time" << std::endl;
     costmap_time_ = nav2_costmap_2d::Costmap2D(msg);
 
     // Initialize collision checker for time map:
     time_checker_ = std::make_shared<GridCollisionChecker> (& costmap_time_, 72, node_);
     time_checker_->setFootprint(this->costmap_ros_->getRobotFootprint(), true, 0.0);
-    std::cout << "Time Costmap getCost(): " << time_checker_->getCost() << std::endl;
-    std::cout << "Time Costmap Collision at (0,0): " << time_checker_->inCollision(0, 0, 0, true) << std::endl;
 
-
+    // Create Plan
     std::cout << "Creating Plan" << std::endl;
     nav_msgs::msg::Path global_path;
 
@@ -203,13 +286,13 @@ nav_msgs::msg::Path StraightLine::createPlan(
     rrt::RRT rrt;
     rrt.setStart(start);
 
-    std::cout << "------Inline Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
+    std::cout << "------Inline Collsion Checker Cost: " << time_checker_->getCost() << std::endl;
 
     unsigned int mx, my;
-    collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
+    time_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
     
     // IF goal is invalid:
-    if (collision_checker_->inCollision(mx, my, 0, true) && time_checker_->inCollision(mx, my, 0, true)){
+    if (time_checker_->inCollision(mx, my, 0, true)){
         RCLCPP_INFO(
             node_->get_logger(), "Invalid Goal");
         return global_path;
@@ -227,24 +310,24 @@ nav_msgs::msg::Path StraightLine::createPlan(
             collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mqx, mqy);
 
             // Now check collision
-            bool collision_detected = collision_checker_->inCollision(mx, my, 0, true);
-            bool collision_time_detected = time_checker_->inCollision(mx, my, 0, true);
-            std::cout << "Time Collision: " << collision_time_detected << std::endl;
+            bool collision_detected = collision_checker_->inCollision(mqx, mqy, 0, true);
+            bool collision_time_detected = time_checker_->inCollision(mqx, mqy, 0, true);
+            std::cout << "Collision from Space map?: " << collision_detected << std::endl;
+            std::cout << "Collision from  Time map?: " << collision_time_detected << std::endl;
 
-            // if (!collision_detected && collision_time_detected){
-            if (!collision_detected && !collision_time_detected){
-
-            rrt::Node* qnear = rrt.find_neighbor(q->position);
-            if (rrt.distance(q->position, qnear->position) > rrt.step_size) {
-                Vector2d qnew_pos = rrt.extend(q, qnear);
-                rrt::Node* qnew = new rrt::Node;
-                qnew->position = qnew_pos;
-                rrt.add(qnear, qnew);
-            } else {
-                rrt::Node* qnew = new rrt::Node;
-                qnew->position = q->position;
-                rrt.add(qnear, qnew);
-            };
+            // if (!collision_detected && !collision_time_detected){
+            if (!collision_time_detected){
+                rrt::Node* qnear = rrt.find_neighbor(q->position);
+                if (rrt.distance(q->position, qnear->position) > rrt.step_size) {
+                    Vector2d qnew_pos = rrt.extend(q, qnear);
+                    rrt::Node* qnew = new rrt::Node;
+                    qnew->position = qnew_pos;
+                    rrt.add(qnear, qnew);
+                } else {
+                    rrt::Node* qnew = new rrt::Node;
+                    qnew->position = q->position;
+                    rrt.add(qnear, qnew);
+                };
             };
         };
 
@@ -314,25 +397,12 @@ nav_msgs::msg::Path StraightLine::createPlan(
         double x_increment = (goali.pose.position.x - starti.pose.position.x) / total_number_of_loop;
         double y_increment = (goali.pose.position.y - starti.pose.position.y) / total_number_of_loop;
 
-        // Find orientation for path segment
-        // float yaw = std::atan2(segment_goal->position.y() - segment_start->position.y(), segment_goal->position.x() - segment_start->position.x());
-        // std::cout << "Yaw: " << yaw << std::endl;
-        // Quaternionf q;
-        // q = AngleAxisf(0, Vector3f::UnitX())
-        //     * AngleAxisf(0, Vector3f::UnitY())
-        //     * AngleAxisf(yaw, Vector3f::UnitZ());
-        // std::cout << "Quaternion: " << std::endl << q.coeffs() << std::endl;
-
         // publish to global path
         for (int i = 0; i < total_number_of_loop; ++i) {
             geometry_msgs::msg::PoseStamped pose;
             pose.pose.position.x = starti.pose.position.x + x_increment * i;
             pose.pose.position.y = starti.pose.position.y + y_increment * i;
             pose.pose.position.z = 0.0;
-            // pose.pose.orientation.x = q.coeffs()[0];
-            // pose.pose.orientation.y = q.coeffs()[1];
-            // pose.pose.orientation.z = q.coeffs()[2];
-            // pose.pose.orientation.w = q.coeffs()[3];
             pose.pose.orientation.x = 0.0;
             pose.pose.orientation.y = 0.0;
             pose.pose.orientation.z = 0.0;
