@@ -61,6 +61,9 @@ private:
     // Time Checker
     std::shared_ptr<GridCollisionChecker> time_checker_;
 
+    // Time Map Publisher
+    std::shared_ptr<nav2_costmap_2d::Costmap2DPublisher> timeMapPublisher;
+
     // TF buffer
     std::shared_ptr<tf2_ros::Buffer> tf_;
 

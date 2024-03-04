@@ -68,93 +68,6 @@ void StraightLine::deactivate()
         name_.c_str());
 }
 
-// nav2_msgs::msg::OccupancyGrid StraightLine::build_timemap(double ax, double ay, double range, double pan_speed, double half_fov_deg, double pan_init, double cam_r){
-//      // create custom cost map with time dependent part
-//     nav_msgs::msg::OccupancyGrid msg;
-//     nav2_costmap_2d::Costmap2D * map = this->costmap_ros_->getCostmap();
-//     int m = map->getSizeInCellsX();
-//     int n = map->getSizeInCellsY();
-//     std::vector<int8_t> data;
-//     auto now = node_->get_clock()->now();
-//     for (int i=0;i<n*m;i++) {
-//         data.push_back(map->getCost(i));
-//     }
-
-//     // Camera Setting
-//     double half_fov = (M_PI/180)*half_fov;
-//     Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
-                        
-//     // Output Camera Position with camera range 0.5
-//     int cam_bound_n = 100;
-//     vector<Vector2d> cam_bound;
-//     for (int i = 0; i < cam_bound_n; i++){
-//         double angi = 2*M_PI/cam_bound_n*i;
-//         Vector2d bound_coord(ax+cam_r*cos(angi), ay+cam_r*sin(angi));
-//         cam_bound.push_back(bound_coord);
-//     }
-
-//     // Costmap for camera boundary
-//     for (int im=0; im<m; im++){
-//         for (int in=0; in<n; in++){
-//             for (int i = 0; i < cam_bound_n; i++) {
-//                 Vector2d temp = cam_bound[i];
-//                 unsigned int mxi, myi;
-//                 collision_checker_->getCostmap()->worldToMap(temp.x(), temp.y(), mxi, myi);
-//                 int cam_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
-//                 data[cam_ind] = 100*(int(now.seconds()));
-
-//             }
-//         }
-    
-//     } 
-//     // Costmap for camera FOV
-//     Vector2d abar(ax, ay);
-//     Vector2d cbar;
-//     double period = 2*M_PI/pan_speed;
-    
-//     for (int im=0; im<m; im++){
-//         for (int in=0; in<n; in++){
-//             // if b = (wxi, wyi),
-//             // find all b s.t. |b-a| < r and |theta| < r
-//             double wxi, wyi;
-//             collision_checker_->getCostmap()->mapToWorld(im, in, wxi, wyi);
-//             Vector2d bbar(wxi, wyi);
-//             Vector2d pbar = bbar - abar;
-
-//             // Update cbar over time
-//             double ti = now.seconds() - (2*M_PI/pan_speed)*std::floor(now.seconds()/(2*M_PI/pan_speed));
-//             cbar.x() = cbarInit.norm()*cos(pan_init + pan_speed*ti);
-//             cbar.y() = cbarInit.norm()*sin(pan_init + pan_speed*ti);
-
-//             // Calculate conditoin
-//             bool inRange = pbar.norm() < range;
-//             double dot_product = pbar.x()*cbar.x() + pbar.y()*cbar.y();
-//             double ang = acos(dot_product/pbar.norm());
-//             bool inAng = abs(ang) <= half_fov;
-            
-//             if (inRange && inAng) {
-//                 unsigned int mxi, myi;
-//                 collision_checker_->getCostmap()->worldToMap(wxi, wyi, mxi, myi);
-//                 int fov_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
-//                 data[fov_ind] = 100*(int(now.seconds()));
-//             }
-//         }
-//     }
-
-//     msg.header.frame_id = "map";
-//     msg.header.stamp = now;
-//     msg.data = data;
-//     msg.info.width = m;
-//     msg.info.height = n;
-//     msg.info.resolution = map->getResolution();
-//     msg.info.map_load_time = node_->get_clock()->now();
-//     msg.info.origin.position.x = map->getOriginX();
-//     msg.info.origin.position.y = map->getOriginY();
-//     this->publisher_costmap_time->publish(msg);
-
-//     return msg;
-// }
-
 nav_msgs::msg::Path StraightLine::createPlan(
     const geometry_msgs::msg::PoseStamped& start,
     const geometry_msgs::msg::PoseStamped& goal)
@@ -167,9 +80,9 @@ nav_msgs::msg::Path StraightLine::createPlan(
     std::vector<int8_t> data;
     auto now = node_->get_clock()->now();
     for (int i=0;i<n*m;i++) {
-        data.push_back(map->getCost(i));
+        // data.push_back(map->getCost(i)); // Feed cost data from costamp_ros_ into new costmap
+        data.push_back(0); // Initialization of all costmap value to 0
     }
-
     
     // Place camera
     double ax, ay;
@@ -179,7 +92,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
     // Camera Setting
     double range = 1.5;
     double pan_speed = 0.00000001;
-    double half_fov = (M_PI/180)*30;
+    double half_fov = (M_PI/180)*180;
     double pan_init = (M_PI/180)*180; // Initial Pan angle
     Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
                         
@@ -201,8 +114,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
                 unsigned int mxi, myi;
                 collision_checker_->getCostmap()->worldToMap(temp.x(), temp.y(), mxi, myi);
                 int cam_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
-                data[cam_ind] = 100*(int(now.seconds()));
-
+                data[cam_ind] = 255*(int(now.seconds()));
             }
         }
     
@@ -211,7 +123,15 @@ nav_msgs::msg::Path StraightLine::createPlan(
     Vector2d abar(ax, ay);
     Vector2d cbar;
     double period = 2*M_PI/pan_speed;
-    
+
+    // Initialize costmap_time_
+    costmap_time_ = nav2_costmap_2d::Costmap2D(this->costmap_ros_->getCostmap()->getSizeInCellsX(),
+                                                this->costmap_ros_->getCostmap()->getSizeInCellsY(),
+                                                this->costmap_ros_->getCostmap()->getResolution(),
+                                                this->costmap_ros_->getCostmap()->getOriginX(),
+                                                this->costmap_ros_->getCostmap()->getOriginY(),
+                                                0);
+
     for (int im=0; im<m; im++){
         for (int in=0; in<n; in++){
             // if b = (wxi, wyi),
@@ -231,12 +151,21 @@ nav_msgs::msg::Path StraightLine::createPlan(
             double dot_product = pbar.x()*cbar.x() + pbar.y()*cbar.y();
             double ang = acos(dot_product/pbar.norm());
             bool inAng = abs(ang) <= half_fov;
+
+            // Assign Cost into Costmap
+            unsigned int mxi, myi;
+            collision_checker_->getCostmap()->worldToMap(wxi, wyi, mxi, myi);
             
             if (inRange && inAng) {
-                unsigned int mxi, myi;
-                collision_checker_->getCostmap()->worldToMap(wxi, wyi, mxi, myi);
+                // Extract Cost Data
                 int fov_ind = collision_checker_->getCostmap()->getIndex(mxi, myi);
-                data[fov_ind] = 100*(int(now.seconds()));
+                char cost = '0'+255;
+                data[fov_ind] = cost;
+                // Assign to costmap_time_
+                costmap_time_.setCost(mxi, myi, cost);
+                // std::cout << "Cost: " << isprint(cost) << ", costmap value: " << isprint(costmap_time_.getCost(mxi, myi)) << std::endl;
+            } else {
+                costmap_time_.setCost(mxi, myi, 0);
             }
         }
     }
@@ -252,12 +181,29 @@ nav_msgs::msg::Path StraightLine::createPlan(
     msg.info.origin.position.y = map->getOriginY();
     this->publisher_costmap_time->publish(msg);
 
-    // Build new time map into nav2_costmap_2d
-    costmap_time_ = nav2_costmap_2d::Costmap2D(msg);
-
     // Initialize collision checker for time map:
+    std::cout << "& costmap_time_ " << & costmap_time_ << std::endl;
+    std::cout << "& costmap_ros   " << this->costmap_ros_->getCostmap() << std::endl;
     time_checker_ = std::make_shared<GridCollisionChecker> (& costmap_time_, 72, node_);
     time_checker_->setFootprint(this->costmap_ros_->getRobotFootprint(), true, 0.0);
+
+    for(int ii=0; ii<m; ii++){
+        for(int jj=0; jj<n; jj++){
+            // Now check collision
+            bool collision_detected = collision_checker_->inCollision(ii, jj, 0, true);
+            bool collision_time_detected = time_checker_->inCollision(ii, jj, 0, true);
+            if(collision_time_detected){
+                std::cout << "Collision from Space map?: " << collision_detected << std::endl;
+                std::cout << "Collision from  Time map?: " << collision_time_detected << std::endl;
+            }
+        }
+    }
+
+    // Try to publish costmap?
+    std::cout << "build publisher" << std::endl;
+    timeMapPublisher = std::make_unique<nav2_costmap_2d::Costmap2DPublisher>(
+      this->node_, & costmap_time_, global_frame_, "time_Map", false);
+    timeMapPublisher->publishCostmap();
 
     // Create Plan
     std::cout << "Creating Plan" << std::endl;
@@ -286,13 +232,13 @@ nav_msgs::msg::Path StraightLine::createPlan(
     rrt::RRT rrt;
     rrt.setStart(start);
 
-    std::cout << "------Inline Collsion Checker Cost: " << time_checker_->getCost() << std::endl;
+    // std::cout << "------Inline Collsion Checker Cost: " << collision_checker_->getCost() << std::endl;
 
     unsigned int mx, my;
-    time_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
+    collision_checker_->getCostmap()->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
     
     // IF goal is invalid:
-    if (time_checker_->inCollision(mx, my, 0, true)){
+    if (collision_checker_->inCollision(mx, my, 0, true)){
         RCLCPP_INFO(
             node_->get_logger(), "Invalid Goal");
         return global_path;
@@ -311,9 +257,9 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
             // Now check collision
             bool collision_detected = collision_checker_->inCollision(mqx, mqy, 0, true);
-            bool collision_time_detected = time_checker_->inCollision(mqx, mqy, 0, true);
-            std::cout << "Collision from Space map?: " << collision_detected << std::endl;
-            std::cout << "Collision from  Time map?: " << collision_time_detected << std::endl;
+            bool collision_time_detected = collision_checker_->inCollision(mqx, mqy, 0, true);
+            // std::cout << "Collision from Space map?: " << collision_detected << std::endl;
+            // std::cout << "Collision from  Time map?: " << collision_time_detected << std::endl;
 
             // if (!collision_detected && !collision_time_detected){
             if (!collision_time_detected){
