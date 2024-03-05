@@ -16,15 +16,14 @@
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "rrt.h"
-#include <visualization_msgs/msg/marker.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
-
+#include <visualization_msgs/msg/marker.hpp>
 
 // ADDED
 
 namespace nav2_straightline_planner {
 
-class StraightLine : public nav2_core::GlobalPlanner , rclcpp::Node {
+class StraightLine : public nav2_core::GlobalPlanner, rclcpp::Node {
 public:
     StraightLine();
     ~StraightLine() = default;
@@ -56,13 +55,14 @@ public:
 
 private:
     // Collision Checker
-    std::shared_ptr<GridCollisionChecker> collision_checker_;
+    // checks wither or not visions in collision with a costmap, using grid
+    // std::shared_ptr<GridCollisionChecker> collision_checker_;
 
     // Time Checker
-    std::shared_ptr<GridCollisionChecker> time_checker_;
+    // std::shared_ptr<GridCollisionChecker> time_checker_;
 
     // Time Map Publisher
-    std::shared_ptr<nav2_costmap_2d::Costmap2DPublisher> timeMapPublisher;
+    std::shared_ptr<nav2_costmap_2d::Costmap2DPublisher> time_map_publisher_;
 
     // TF buffer
     std::shared_ptr<tf2_ros::Buffer> tf_;
@@ -71,13 +71,13 @@ private:
     nav2_util::LifecycleNode::SharedPtr node_;
 
     // Global Costmap
-    //nav2_costmap_2d::Costmap2D* costmap_; 
+    // This is a wrapper for a costmap to handle publication
+    // nav2_costmap_2d::Costmap2D* costmap_;
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
 
-    //nav2_costmap_2d::Costmap2D* costmap_; 
-    // std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_time_;
-    nav2_costmap_2d::Costmap2D costmap_time_;
-    
+    // nav2_costmap_2d::Costmap2D* costmap_;
+    //  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_time_;
+    // nav2_costmap_2d::Costmap2D costmap_time_;
 
     // The global frame of the costmap
     std::string global_frame_, name_;

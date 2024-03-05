@@ -7,7 +7,7 @@ RRT::RRT()
     // RRT Loop Control
     step_size = 1;
     max_iter = 100;
-    
+
     root = new Node;
     root->parent = NULL;
     lastNode = root;

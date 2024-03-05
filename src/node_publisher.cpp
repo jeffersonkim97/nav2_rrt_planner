@@ -4,10 +4,10 @@
 #include <memory>
 #include <string>
 
+#include "nav2_straightline_planner/collision_checker.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-#include "nav2_straightline_planner/collision_checker.hpp"
 
 using namespace std::chrono_literals;
 
