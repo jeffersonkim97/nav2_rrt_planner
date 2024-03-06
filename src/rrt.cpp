@@ -6,7 +6,7 @@ RRT::RRT()
     // obstacles = new Obstacles;
     // RRT Loop Control
     step_size = 0.1;
-    max_iter = 1000;
+    max_iter = 10000;
 
     root = new Node;
     root->parent = NULL;
@@ -50,8 +50,12 @@ Node* RRT::randomSample(const geometry_msgs::msg::PoseStamped& start, const geom
 
     Vector2d point;
     if (sampleGoal <= 0.1){
-        point.x() = std::uniform_real_distribution<double>(start.pose.position.x-buffer, goal.pose.position.x+buffer)(generator);
-        point.y() = std::uniform_real_distribution<double>(start.pose.position.y-buffer, goal.pose.position.y+buffer)(generator);
+        // point.x() = std::uniform_real_distribution<double>(std::min(start.pose.position.x-buffer, start.pose.position.x+buffer), std::max(goal.pose.position.x-buffer, goal.pose.position.x+buffer))(generator);
+        // point.y() = std::uniform_real_distribution<double>(std::min(start.pose.position.y-buffer, start.pose.position.y+buffer), std::max(goal.pose.position.y-buffer, goal.pose.position.y+buffer))(generator);
+        // point.x() = std::uniform_real_distribution<double>(start.pose.position.x, goal.pose.position.x)(generator);
+        // point.y() = std::uniform_real_distribution<double>(start.pose.position.y, goal.pose.position.y)(generator);
+        point.x() = std::uniform_real_distribution<double>(std::min(start.pose.position.x, goal.pose.position.x), std::max(start.pose.position.x, goal.pose.position.x))(generator);
+        point.y() = std::uniform_real_distribution<double>(std::min(start.pose.position.y, goal.pose.position.y), std::max(start.pose.position.y, goal.pose.position.y))(generator);
     } else {
         point.x() = goal.pose.position.x;
         point.y() = goal.pose.position.y;

@@ -16,6 +16,7 @@
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "rrt.h"
+#include "rrtc.h"
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 
@@ -52,6 +53,8 @@ public:
 
     void visualize_tree(rrt::Node* parent);
     void visualize_node(visualization_msgs::msg::Marker* marker, rrt::Node* parent, int depth);
+    void visualize_tree(rrtc::Node* parent);
+    void visualize_node(visualization_msgs::msg::Marker* marker, rrtc::Node* parent, int depth);
 
 private:
     // Collision Checker

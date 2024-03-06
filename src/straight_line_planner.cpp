@@ -82,14 +82,6 @@ nav_msgs::msg::Path StraightLine::createPlan(
     // create a new temporary costmap copying the static map
     // that will hold time based obstacle as well
     nav2_costmap_2d::Costmap2D time_map = *map;
-    /*
-    for (size_t i=0; i<m; i++) {
-        for (size_t j=0; j<n; j++) {
-            unsigned char c = map->getCost(i, j);
-            time_map.setCost(i, j, c);
-        }
-    }
-    */
 
     //-------------------------------------------------------------------------
     // assign cost based on time obstacles
@@ -255,6 +247,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
     rrt.setGoal(goal);
 
     int max_iter = rrt.max_iter;
+    int interpolation = 100;
     for (int i = 0; i < max_iter; i++) {
         // rrt::Node* q = rrt.randomSample(std::min(std::min(wx_map_init, wx_map_end), std::min(startx, goalx)),
         //                                 std::max(std::max(wx_map_init, wx_map_end), std::max(startx, goalx)),
@@ -270,18 +263,31 @@ nav_msgs::msg::Path StraightLine::createPlan(
             // Now check collision
             bool collision_detected = collision_checker.inCollision(mqx, mqy, 0, true);
             if (collision_detected==0) {
-                // std::cout << "Grid Coordinate of q: (" << mqx << ", " << mqy << ")" << ", Check Collision: " << collision_detected << std::endl;
+                // Find nearest neighbor
                 rrt::Node* qnear = rrt.find_neighbor(q->position);
+
+                // Find new vertex qnew
+                rrt::Node* qnew = new rrt::Node;
                 if (rrt.distance(q->position, qnear->position) > rrt.step_size) {
                     Vector2d qnew_pos = rrt.extend(q, qnear);
-                    rrt::Node* qnew = new rrt::Node;
                     qnew->position = qnew_pos;
-                    rrt.add(qnear, qnew);
                 } else {
-                    rrt::Node* qnew = new rrt::Node;
                     qnew->position = q->position;
-                    rrt.add(qnear, qnew);
                 };
+
+                // Interpolate points in straight path and check for collision
+                int interpolated_path_collision = 0;
+                for (int ip = 0; ip < interpolation; ip++){
+                    double ipX = (qnew->position.x()-qnear->position.x())/interpolation*ip+qnear->position.x();
+                    double ipY = (qnew->position.x()-qnear->position.y())/interpolation*ip+qnear->position.y();
+
+                    unsigned int mqix, mqiy;
+                    time_map.worldToMap(ipX, ipY, mqix, mqiy);
+                    interpolated_path_collision += collision_checker.inCollision(mqix, mqiy, 0, true);
+                }
+                if (interpolated_path_collision == 0){
+                    rrt.add(qnear, qnew);
+                }
             };
         };
 
