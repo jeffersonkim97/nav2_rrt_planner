@@ -24,6 +24,7 @@ public:
     void setStart(const geometry_msgs::msg::PoseStamped& start);
     void setGoal(const geometry_msgs::msg::PoseStamped& goal);
     Node* randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal);
+    Node* randomSample(const double xmin, const double xmax, const double ymin, const double ymax, const geometry_msgs::msg::PoseStamped& goal);
     Node* find_neighbor(Vector2d point);
     int distance(Vector2d& p, Vector2d& q);
     void proximity(Vector2d point, float radius, vector<Node*>& out_nodes);

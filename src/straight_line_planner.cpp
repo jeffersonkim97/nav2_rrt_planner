@@ -101,8 +101,8 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
         // Camera Setting
         double range = 1.5;
-        double pan_speed = 0.00000001;
-        double half_fov = (M_PI / 180) * 180;
+        double pan_speed = 0.25;
+        double half_fov = (M_PI / 180) * 30;
         double pan_init = (M_PI / 180) * 180; // Initial Pan angle
         Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
 
@@ -174,8 +174,6 @@ nav_msgs::msg::Path StraightLine::createPlan(
     collision_checker.setFootprint(costmap_ros_->getRobotFootprint(), true, 0.0);
 
     //-------------------------------------------------------------------------
-    // run rrt
-    //-------------------------------------------------------------------------
     // send the message to ros
     {
         nav_msgs::msg::OccupancyGrid msg;
@@ -202,8 +200,8 @@ nav_msgs::msg::Path StraightLine::createPlan(
         this->publisher_costmap_time->publish(msg);
     }
 
-    // Create Plan
-    std::cout << "Creating Plan" << std::endl;
+    //-------------------------------------------------------------------------
+    // execute RRT
     nav_msgs::msg::Path global_path;
 
     // Checking if the goal and start state is in the global frame
@@ -231,9 +229,23 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
     unsigned int mx, my;
     time_map.worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
+    double wx_map_end, wy_map_end;
+    time_map.mapToWorld(m, n, wx_map_end, wy_map_end);
+    double wx_map_init, wy_map_init;
+    time_map.mapToWorld(0, 0, wx_map_init, wy_map_init);
+
+    double startx = (double) start.pose.position.x;
+    double starty = (double) start.pose.position.y;
+    double goalx = (double) goal.pose.position.x;
+    double goaly = (double) goal.pose.position.y;
+
+    // std::cout << "map_init: (" << wx_map_init << ", " << wy_map_init << ")" << std::endl;
+    // std::cout << "map_end: (" << wx_map_end << ", " << wy_map_end << ")" << std::endl;
+    // std::cout << "start: (" << startx << ", " << starty << ")" << std::endl;
+    // std::cout << "goal: (" << goalx << ", " << goaly << ")" << std::endl;
 
     // IF goal is invalid:
-    if (collision_checker.inCollision(mx, my, 0, true)) {
+    if (collision_checker.inCollision(mx, my, 0, true)==1) {
         RCLCPP_INFO(
             node_->get_logger(), "Invalid Goal");
         return global_path;
@@ -244,15 +256,21 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
     int max_iter = rrt.max_iter;
     for (int i = 0; i < max_iter; i++) {
+        // rrt::Node* q = rrt.randomSample(std::min(std::min(wx_map_init, wx_map_end), std::min(startx, goalx)),
+        //                                 std::max(std::max(wx_map_init, wx_map_end), std::max(startx, goalx)),
+        //                                 std::min(std::min(wy_map_init, wy_map_end), std::min(starty, goaly)),
+        //                                 std::max(std::max(wy_map_init, wy_map_end), std::max(starty, goaly)),
+        //                                 goal);
         rrt::Node* q = rrt.randomSample(start, goal);
         if (q != NULL) {
             // Convert intermediate world coord into map coord
             unsigned int mqx, mqy;
-            time_map.worldToMap(goal.pose.position.x, goal.pose.position.y, mqx, mqy);
+            time_map.worldToMap(q->position.x(), q->position.y(), mqx, mqy);
 
             // Now check collision
             bool collision_detected = collision_checker.inCollision(mqx, mqy, 0, true);
-            if (!collision_detected) {
+            if (collision_detected==0) {
+                // std::cout << "Grid Coordinate of q: (" << mqx << ", " << mqy << ")" << ", Check Collision: " << collision_detected << std::endl;
                 rrt::Node* qnear = rrt.find_neighbor(q->position);
                 if (rrt.distance(q->position, qnear->position) > rrt.step_size) {
                     Vector2d qnew_pos = rrt.extend(q, qnear);

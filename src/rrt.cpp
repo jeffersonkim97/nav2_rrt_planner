@@ -5,8 +5,8 @@ RRT::RRT()
 {
     // obstacles = new Obstacles;
     // RRT Loop Control
-    step_size = 1;
-    max_iter = 100;
+    step_size = 0.1;
+    max_iter = 1000;
 
     root = new Node;
     root->parent = NULL;
@@ -25,15 +25,43 @@ void RRT::setGoal(const geometry_msgs::msg::PoseStamped& goal)
     endPos.y() = goal.pose.position.y;
 }
 
-Node* RRT::randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal)
+Node* RRT::randomSample(const double xmin, const double xmax, const double ymin, const double ymax, const geometry_msgs::msg::PoseStamped& goal)
 {
-    Vector2d point(std::uniform_real_distribution<double>(start.pose.position.x, goal.pose.position.x)(generator),
-        std::uniform_real_distribution<double>(start.pose.position.y, goal.pose.position.y)(generator));
+    double sampleGoal = std::uniform_real_distribution<double>(0, 1)(generator);
+
+    Vector2d point;
+    if (sampleGoal <= 0.1){
+        point.x() = std::uniform_real_distribution<double>(xmin, xmax)(generator);
+        point.y() = std::uniform_real_distribution<double>(ymin, ymax)(generator);
+    } else {
+        point.x() = goal.pose.position.x;
+        point.y() = goal.pose.position.y;
+    }
 
     Node* sample = new Node;
     sample->position = point;
     return sample;
 }
+
+Node* RRT::randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal)
+{
+    double sampleGoal = std::uniform_real_distribution<double>(0, 1)(generator);
+    double buffer = 0.5;
+
+    Vector2d point;
+    if (sampleGoal <= 0.1){
+        point.x() = std::uniform_real_distribution<double>(start.pose.position.x-buffer, goal.pose.position.x+buffer)(generator);
+        point.y() = std::uniform_real_distribution<double>(start.pose.position.y-buffer, goal.pose.position.y+buffer)(generator);
+    } else {
+        point.x() = goal.pose.position.x;
+        point.y() = goal.pose.position.y;
+    }
+
+    Node* sample = new Node;
+    sample->position = point;
+    return sample;
+}
+
 
 int RRT::distance(Vector2d& p, Vector2d& q)
 {
