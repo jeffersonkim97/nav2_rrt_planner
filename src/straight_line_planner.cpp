@@ -1,8 +1,8 @@
 #include "nav2_straightline_planner/straight_line_planner.hpp"
-//#include "nav2_costmap_2d/costmap_2d.hpp"
 #include "nav2_costmap_2d/costmap_2d.hpp"
 //#include "nav2_costmap_2d/footprint.hpp"
 #include "nav2_straightline_planner/rrt.h"
+#include "nav2_straightline_planner/rrtc.h"
 #include "nav2_util/node_utils.hpp"
 #include <algorithm>
 #include <cmath>
@@ -11,6 +11,7 @@
 #include <nav_msgs/msg/detail/occupancy_grid__struct.hpp>
 #include <rclcpp/time.hpp>
 #include <string>
+#include "nav2_straightline_planner/camera.hpp"
 #include <visualization_msgs/msg/marker.hpp>
 
 // ADDED
@@ -85,8 +86,9 @@ nav_msgs::msg::Path StraightLine::createPlan(
 
     //-------------------------------------------------------------------------
     // assign cost based on time obstacles
+    // ---------------------------CAM0-----------------------------------------
     {
-        // Place camera
+        // Place cam0
         double ax, ay;
         ax = 3.0;
         ay = 0.0;
@@ -94,7 +96,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
         // Camera Setting
         double range = 1.5;
         double pan_speed = 0.25;
-        double half_fov = (M_PI / 180) * 30;
+        double half_fov = (M_PI / 180) * 20;
         double pan_init = (M_PI / 180) * 180; // Initial Pan angle
         Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
 
@@ -115,8 +117,157 @@ nav_msgs::msg::Path StraightLine::createPlan(
                     Vector2d temp = cam_bound[i];
                     unsigned int mxi, myi;
                     time_map.worldToMap(temp.x(), temp.y(), mxi, myi);
-                    int cam_ind = time_map.getIndex(mxi, myi);
-                    // time_map.setCost(im, in, 10);
+                    time_map.setCost(mxi, myi, 254);
+                }
+            }
+        }
+
+        // Costmap for camera FOV
+        Vector2d abar(ax, ay);
+        Vector2d cbar;
+        double period = 2 * M_PI / pan_speed;
+
+        for (int im = 0; im < m; im++) {
+            for (int in = 0; in < n; in++) {
+                // if b = (wxi, wyi),
+                // find all b s.t. |b-a| < r and |theta| < r
+                double wxi, wyi;
+                time_map.mapToWorld(im, in, wxi, wyi);
+                Vector2d bbar(wxi, wyi);
+                Vector2d pbar = bbar - abar;
+
+                // Update cbar over time
+                double ti = now.seconds() - (2 * M_PI / pan_speed) * std::floor(now.seconds() / (2 * M_PI / pan_speed));
+                cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
+                cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
+
+                // Calculate conditoin
+                bool inRange = pbar.norm() < range;
+                double dot_product = pbar.x() * cbar.x() + pbar.y() * cbar.y();
+                double ang = acos(dot_product / pbar.norm());
+                bool inAng = abs(ang) <= half_fov;
+
+                // Assign Cost into Costmap
+                unsigned int mxi, myi;
+                time_map.worldToMap(wxi, wyi, mxi, myi);
+
+                if (inRange && inAng) {
+                    // Extract Cost Data
+                    time_map.setCost(mxi, myi, 254);
+                } else {
+                    // time_map.setCost(mxi, myi, 0);
+                }
+            }
+        }
+    }
+
+    // ---------------------------CAM1-----------------------------------------
+    {
+        // Place cam0
+        double ax, ay;
+        ax = -1.0;
+        ay = 3;
+
+        // Camera Setting
+        double range = 2.5;
+        double pan_speed = 0.1;
+        double half_fov = (M_PI / 180) * 35;
+        double pan_init = (M_PI / 180) * 90; // Initial Pan angle
+        Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
+
+        // Output Camera Position with camera range 0.5
+        double cam_r = 0.1;
+        int cam_bound_n = 100;
+        vector<Vector2d> cam_bound;
+        for (int i = 0; i < cam_bound_n; i++) {
+            double angi = 2 * M_PI / cam_bound_n * i;
+            Vector2d bound_coord(ax + cam_r * cos(angi), ay + cam_r * sin(angi));
+            cam_bound.push_back(bound_coord);
+        }
+
+        // Costmap for camera boundary
+        for (int im = 0; im < m; im++) {
+            for (int in = 0; in < n; in++) {
+                for (int i = 0; i < cam_bound_n; i++) {
+                    Vector2d temp = cam_bound[i];
+                    unsigned int mxi, myi;
+                    time_map.worldToMap(temp.x(), temp.y(), mxi, myi);
+                    time_map.setCost(mxi, myi, 254);
+                }
+            }
+        }
+
+        // Costmap for camera FOV
+        Vector2d abar(ax, ay);
+        Vector2d cbar;
+        double period = 2 * M_PI / pan_speed;
+
+        for (int im = 0; im < m; im++) {
+            for (int in = 0; in < n; in++) {
+                // if b = (wxi, wyi),
+                // find all b s.t. |b-a| < r and |theta| < r
+                double wxi, wyi;
+                time_map.mapToWorld(im, in, wxi, wyi);
+                Vector2d bbar(wxi, wyi);
+                Vector2d pbar = bbar - abar;
+
+                // Update cbar over time
+                double ti = now.seconds() - (2 * M_PI / pan_speed) * std::floor(now.seconds() / (2 * M_PI / pan_speed));
+                cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
+                cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
+
+                // Calculate conditoin
+                bool inRange = pbar.norm() < range;
+                double dot_product = pbar.x() * cbar.x() + pbar.y() * cbar.y();
+                double ang = acos(dot_product / pbar.norm());
+                bool inAng = abs(ang) <= half_fov;
+
+                // Assign Cost into Costmap
+                unsigned int mxi, myi;
+                time_map.worldToMap(wxi, wyi, mxi, myi);
+
+                if (inRange && inAng) {
+                    // Extract Cost Data
+                    time_map.setCost(mxi, myi, 254);
+                } else {
+                    // time_map.setCost(mxi, myi, 0);
+                }
+            }
+        }
+    }
+
+    // ---------------------------CAM2-----------------------------------------
+    {
+        // Place cam0
+        double ax, ay;
+        ax = -3.0;
+        ay = 1.0;
+
+        // Camera Setting
+        double range = 2;
+        double pan_speed = 0.15;
+        double half_fov = (M_PI / 180) * 10;
+        double pan_init = (M_PI / 180) * 30; // Initial Pan angle
+        Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
+
+        // Output Camera Position with camera range 0.5
+        double cam_r = 0.1;
+        int cam_bound_n = 100;
+        vector<Vector2d> cam_bound;
+        for (int i = 0; i < cam_bound_n; i++) {
+            double angi = 2 * M_PI / cam_bound_n * i;
+            Vector2d bound_coord(ax + cam_r * cos(angi), ay + cam_r * sin(angi));
+            cam_bound.push_back(bound_coord);
+        }
+
+        // Costmap for camera boundary
+        for (int im = 0; im < m; im++) {
+            for (int in = 0; in < n; in++) {
+                for (int i = 0; i < cam_bound_n; i++) {
+                    Vector2d temp = cam_bound[i];
+                    unsigned int mxi, myi;
+                    time_map.worldToMap(temp.x(), temp.y(), mxi, myi);
+                    time_map.setCost(mxi, myi, 254);
                 }
             }
         }
@@ -218,23 +369,16 @@ nav_msgs::msg::Path StraightLine::createPlan(
     // Run RRT
     rrt::RRT rrt;
     rrt.setStart(start);
-
+    
     unsigned int mx, my;
     time_map.worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
     double wx_map_end, wy_map_end;
     time_map.mapToWorld(m, n, wx_map_end, wy_map_end);
     double wx_map_init, wy_map_init;
     time_map.mapToWorld(0, 0, wx_map_init, wy_map_init);
-
-    double startx = (double) start.pose.position.x;
-    double starty = (double) start.pose.position.y;
     double goalx = (double) goal.pose.position.x;
     double goaly = (double) goal.pose.position.y;
 
-    // std::cout << "map_init: (" << wx_map_init << ", " << wy_map_init << ")" << std::endl;
-    // std::cout << "map_end: (" << wx_map_end << ", " << wy_map_end << ")" << std::endl;
-    // std::cout << "start: (" << startx << ", " << starty << ")" << std::endl;
-    // std::cout << "goal: (" << goalx << ", " << goaly << ")" << std::endl;
 
     // IF goal is invalid:
     if (collision_checker.inCollision(mx, my, 0, true)==1) {
@@ -249,12 +393,12 @@ nav_msgs::msg::Path StraightLine::createPlan(
     int max_iter = rrt.max_iter;
     int interpolation = 100;
     for (int i = 0; i < max_iter; i++) {
-        // rrt::Node* q = rrt.randomSample(std::min(std::min(wx_map_init, wx_map_end), std::min(startx, goalx)),
-        //                                 std::max(std::max(wx_map_init, wx_map_end), std::max(startx, goalx)),
-        //                                 std::min(std::min(wy_map_init, wy_map_end), std::min(starty, goaly)),
-        //                                 std::max(std::max(wy_map_init, wy_map_end), std::max(starty, goaly)),
-        //                                 goal);
-        rrt::Node* q = rrt.randomSample(start, goal);
+        rrt::Node* q = rrt.randomSample(std::min(std::min(wx_map_init, wx_map_end), goalx),
+                                        std::max(std::max(wx_map_init, wx_map_end), goalx),
+                                        std::min(std::min(wy_map_init, wy_map_end), goaly),
+                                        std::max(std::max(wy_map_init, wy_map_end), goaly),
+                                        goal);
+        // rrt::Node* q = rrt.randomSample(start, goal);
         if (q != NULL) {
             // Convert intermediate world coord into map coord
             unsigned int mqx, mqy;
@@ -285,6 +429,8 @@ nav_msgs::msg::Path StraightLine::createPlan(
                     time_map.worldToMap(ipX, ipY, mqix, mqiy);
                     interpolated_path_collision += collision_checker.inCollision(mqix, mqiy, 0, true);
                 }
+                // std::cout << "Path Collision Check: " << interpolated_path_collision << std::endl;
+
                 if (interpolated_path_collision == 0){
                     rrt.add(qnear, qnew);
                 }

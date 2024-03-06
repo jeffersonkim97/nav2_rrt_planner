@@ -5,8 +5,8 @@ RRT::RRT()
 {
     // obstacles = new Obstacles;
     // RRT Loop Control
-    step_size = 0.1;
-    max_iter = 10000;
+    step_size = 0.5;
+    max_iter = 1000;
 
     root = new Node;
     root->parent = NULL;
