@@ -50,7 +50,9 @@ set(dependencies
 
 add_library(${library_name} SHARED
   src/straight_line_planner.cpp
+  src/RRTCPlanner.cpp
   src/rrt.cpp
+  src/rrtc.cpp
   src/collision_checker.cpp
 )
 

@@ -3,8 +3,8 @@
 <package format="3">
   <name>nav2_straightline_planner</name>
   <version>1.0.0</version>
-  <description>Simple straight line planner.</description>
-  <maintainer email="shivaang14@gmail.com">Shivang Patel</maintainer>
+  <description>RRT planner.</description>
+  <maintainer email="kim2153@purdue.edu">Jaehyeok Kim</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

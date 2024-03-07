@@ -1,5 +1,11 @@
 <library path="nav2_straightline_planner_plugin">
 	<class name="nav2_straightline_planner/StraightLine" type="nav2_straightline_planner::StraightLine" base_class_type="nav2_core::GlobalPlanner">
-	  <description>This is an example plugin which produces straight path.</description>
+	  <description>RRT path planner plugin.</description>
+	</class>
+</library>
+
+<library path="nav2_straightline_planner_plugin">
+	<class name="nav2_straightline_planner/RRTCPlanner" type="nav2_straightline_planner::RRTCPlanner" base_class_type="nav2_core::GlobalPlanner">
+	  <description>RRT-Connect in Dynamic map path planner plugin.</description>
 	</class>
 </library>
