@@ -24,6 +24,7 @@ public:
     void setStart(const geometry_msgs::msg::PoseStamped& start);
     void setGoal(const geometry_msgs::msg::PoseStamped& goal);
     Node* randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter);
+    Node* randomSample(double x1, double y1, double x2, double y2, const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter);
     Node* find_neighbor(Vector2d point, int tree_counter);
     int distance(Vector2d& p, Vector2d& q);
     void proximity(Vector2d point, float radius, vector<Node*>& out_nodes, int tree_counter);
@@ -32,6 +33,7 @@ public:
     double PathCost(Node* qFrom, Node* qTo);
     void add(Node* qnear, Node* qnew, int tree_counter);
     bool reached(int tree_counter);
+    Node* reachedNode(int tree_counter);
 
     vector<Node*> nodesStart, nodesGoal;
     vector<Node*> path, startPath, goalPath;

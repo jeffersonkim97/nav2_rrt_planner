@@ -423,7 +423,7 @@ nav_msgs::msg::Path StraightLine::createPlan(
                 int interpolated_path_collision = 0;
                 for (int ip = 0; ip < interpolation; ip++){
                     double ipX = (qnew->position.x()-qnear->position.x())/interpolation*ip+qnear->position.x();
-                    double ipY = (qnew->position.x()-qnear->position.y())/interpolation*ip+qnear->position.y();
+                    double ipY = (qnew->position.y()-qnear->position.y())/interpolation*ip+qnear->position.y();
 
                     unsigned int mqix, mqiy;
                     time_map.worldToMap(ipX, ipY, mqix, mqiy);
