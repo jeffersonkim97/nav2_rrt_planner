@@ -22,13 +22,12 @@ class RRTC {
 public:
     RRTC();
     void initialize();
-    void setStart(const geometry_msgs::msg::PoseStamped& start);
-    void setGoal(const geometry_msgs::msg::PoseStamped& goal);
+    void setStart(const geometry_msgs::msg::PoseStamped& start, double startTime);
+    void setGoal(const geometry_msgs::msg::PoseStamped& goal, double goalTime);
     Node* randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter);
     Node* randomSample(double x1, double y1, double x2, double y2, const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter);
     Node* find_neighbor(Node* point, int tree_counter);
     int distance(Vector2d& p, Vector2d& q);
-    void proximity(Vector2d point, float radius, vector<Node*>& out_nodes, int tree_counter);
     Vector2d extend(Node* q, Node* qnear);
     double Cost(Node* q);
     double PathCost(Node* qFrom, Node* qTo);

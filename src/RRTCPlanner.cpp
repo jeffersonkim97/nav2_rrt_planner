@@ -36,6 +36,7 @@ void RRTCPlanner::configure(
 
     costmap_ros_ = costmap_ros;
     global_frame_ = costmap_ros->getGlobalFrameID();
+    path_exist = false;
 
     // Parameter initialization
     nav2_util::declare_parameter_if_not_declared(
@@ -203,7 +204,7 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
 
     // Run RRT
     rrtc::RRTC rrt;
-    rrt.setStart(start);
+    rrt.setStart(start, now.seconds());
     
     unsigned int mx, my;
     time_map.worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
@@ -226,32 +227,27 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
         std::cout << "Invalid" << std::endl;
     }
 
-    rrt.setGoal(goal);
-
-    std::cout << "RRT" << std::endl;
+    rrt.setGoal(goal, now.seconds()+100);
 
     int max_iter = rrt.max_iter;
     int interpolation = rrt.step_size/0.01;
     for (int i = 0; i < max_iter; i++) {
-        std::cout << "i: " << i << std::endl;
         // Extract random sample
-        std::cout << "Random Sample" << std::endl;
         // rrtc::Node* q = rrt.randomSample(start, goal, i);
         rrtc::Node* q = rrt.randomSample(wx_map_init, wy_map_init, wx_map_end, wy_map_end, start, goal, i);
         if (q != NULL) {
             // Convert intermediate world coord into map coord
             unsigned int mqx, mqy;
             time_map.worldToMap(q->position.x(), q->position.y(), mqx, mqy);
+            
 
             // Now check collision
-            std::cout << "Collision Check" << std::endl;
             bool collision_detected = collision_checker.inCollision(mqx, mqy, 0, true);
             if (collision_detected==0) {
                 // Find nearest neighbor
                 rrtc::Node* qnear = rrt.find_neighbor(q, i);
 
                 // Find new vertex qnew
-                std::cout << "Extend" << std::endl;
                 rrtc::Node* qnew = new rrtc::Node;
                 if ((q->position - qnear->position).norm() > rrt.step_size) {
                     Vector2d qnew_pos = rrt.extend(q, qnear);
@@ -260,25 +256,68 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
                     qnew->position = q->position;
                 };
 
-                // Interpolate points in straight path and check for collision
-                int interpolated_path_collision = 0;
-                for (int ip = 0; ip < interpolation; ip++){
-                    double ipX = (qnew->position.x()-qnear->position.x())/interpolation*ip+qnear->position.x();
-                    double ipY = (qnew->position.y()-qnear->position.y())/interpolation*ip+qnear->position.y();
-
-                    unsigned int mqix, mqiy;
-                    time_map.worldToMap(ipX, ipY, mqix, mqiy);
-                    interpolated_path_collision += collision_checker.inCollision(mqix, mqiy, 0, true);
+                if (i%2 == 0){
+                    qnew->timestamp = qnear->timestamp+((q->position - qnear->position).norm())/0.5;
+                } else {
+                    qnew->timestamp = qnear->timestamp-((qnear->position - q->position).norm())/0.5;
                 }
 
-                if (interpolated_path_collision == 0){
-                    std::cout << "Add Node" << std::endl;
-                    rrt.add(qnear, qnew, i);
+                bool future_collision_detected;
+                {
+                    double ax = cam_ax[0];
+                    double ay = cam_ay[0];
+                    double range = cam_range[0];
+                    double pan_speed = cam_pan_speed[0];
+                    double half_fov = cam_half_fov[0];
+                    double pan_init = cam_pan_init[0];
+
+                    Vector2d cbarInit(cos(pan_init), sin(pan_init));
+                    Vector2d abar(ax, ay);
+                    Vector2d cbar;
+
+                    double wxi = q->position.x();
+                    double wyi = q->position.y();
+
+                    Vector2d bbar(wxi, wyi);
+                    Vector2d pbar = bbar - abar;
+
+                    // Update cbar over time
+                    double checkTime = q->timestamp;
+                    double ti = checkTime - (2 * M_PI / pan_speed) * std::floor(checkTime / (2 * M_PI / pan_speed));
+                    cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
+                    cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
+
+                    // Calculate conditoin
+                    bool inRange = pbar.norm() < range;
+                    double dot_product = pbar.x() * cbar.x() + pbar.y() * cbar.y();
+                    double ang = acos(dot_product / pbar.norm());
+                    bool inAng = abs(ang) <= half_fov;
+
+                    if (inRange && inAng) {
+                        future_collision_detected = 1;
+                    } else {
+                        future_collision_detected = 0;
+                    }
+                }
+
+                if (future_collision_detected == 0) {
+                    // Interpolate points in straight path and check for collision
+                    int interpolated_path_collision = 0;
+                    for (int ip = 0; ip < interpolation; ip++){
+                        double ipX = (qnew->position.x()-qnear->position.x())/interpolation*ip+qnear->position.x();
+                        double ipY = (qnew->position.y()-qnear->position.y())/interpolation*ip+qnear->position.y();
+
+                        unsigned int mqix, mqiy;
+                        time_map.worldToMap(ipX, ipY, mqix, mqiy);
+                        interpolated_path_collision += collision_checker.inCollision(mqix, mqiy, 0, true);
+                    }
+
+                    if (interpolated_path_collision == 0){
+                        rrt.add(qnear, qnew, i);
+                    }
                 }
             };
         };
-
-        std::cout << "check if reached: " << rrt.reached(i) <<  std::endl;
 
         // Check if connection is reached
         if (rrt.reached(i)){
@@ -319,8 +358,6 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
                     break;
                 }
             }
-        } else {
-            std::cout << "Loop back for sampling" << std::endl;
         }
 
     }
@@ -455,7 +492,7 @@ void RRTCPlanner::visualize_tree(rrtc::Node* parent, string tree_name, int count
     marker.color.b = 0.0;
     marker.color.g = 0.0;
     marker.color.r = 1.0;
-
+    
     visualize_node(&marker, parent, 0);
     RCLCPP_INFO(node_->get_logger(), "Publishing RRT Nodes");
     if (counter%2 == 0){
@@ -490,32 +527,21 @@ void RRTCPlanner::visualize_node(visualization_msgs::msg::Marker* marker, rrtc::
     }
 };
 
-bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q, double currTime){
-    Vector2d cbarInit(cos(pan_init), sin(pan_init));
-
+bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q){
     // Costmap for camera FOV
+    Vector2d cbarInit(cos(pan_init), sin(pan_init));
     Vector2d abar(ax, ay);
     Vector2d cbar;
-    double period = 2 * M_PI / pan_speed;
-
-    std::cout << "kek1" << std::endl;
 
     for (int im = 0; im < m; im++) {
         for (int in = 0; in < n; in++) {
-            std::cout << "kek" << std::endl;
-            // if b = (wxi, wyi),
-            // find all b s.t. |b-a| < r and |theta| < r
             double wxi, wyi;
             time_map.mapToWorld(im, in, wxi, wyi);
             Vector2d bbar(wxi, wyi);
             Vector2d pbar = bbar - abar;
 
-            // Distance to each grid
-            double distToGrid = sqrt(pow((wxi-q->position.x()), 2) + pow((wyi-q->position.y()), 2));
-            double timeToGrid = distToGrid/0.5;
-
             // Update cbar over time
-            double checkTime = currTime+timeToGrid;
+            double checkTime = q->timestamp;
             double ti = checkTime - (2 * M_PI / pan_speed) * std::floor(checkTime / (2 * M_PI / pan_speed));
             cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
             cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);

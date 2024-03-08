@@ -45,7 +45,7 @@ public:
     void visualize_tree(rrtc::Node* parent, string tree_name, int counter);
     void visualize_node(visualization_msgs::msg::Marker* marker, rrtc::Node* parent, int depth);
 
-    bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q, double currTime);
+    bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q);
 
 private:
     // Time Map Publisher
@@ -69,6 +69,8 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_start_list_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr publisher_goal_list_;
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher_costmap_time;
+    // rrtc::RRTC rrt;
+    bool path_exist;
 };
 
 } // namespace nav2_straightline_planner
