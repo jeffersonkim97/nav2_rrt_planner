@@ -86,24 +86,30 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
     //-------------------------------------------------------------------------
     // assign cost based on time obstacles
     // ---------------------------CAM0-----------------------------------------
-    {
+    vector<double> cam_ax = {0.0, 0.0};
+    vector<double> cam_ay = {-2, 2};
+    vector<double> cam_range = {1.50, 1.50};
+    vector<double> cam_pan_speed = {0.1, -0.2};
+    vector<double> cam_half_fov = {20, 30};
+    vector<double> cam_pan_init = {180, 90};
+
+    for (size_t cami = 0; cami<cam_ax.size(); cami++){
         // Place cam0
         double ax, ay;
-        ax = 3.0;
-        ay = 0.0;
+        ax = cam_ax[cami];
+        ay = cam_ay[cami];
 
         // Camera Setting
-        double range = 2;
-        double pan_speed = 0.25;
-        double half_fov = (M_PI / 180) * 20 * 1.5;
-        double pan_init = (M_PI / 180) * 180; // Initial Pan angle
+        double range = cam_range[cami];
+        double pan_speed = cam_pan_speed[cami];
+        double half_fov = (M_PI / 180) * cam_half_fov[cami];
+        double pan_init = (M_PI / 180) * cam_pan_init[cami]; // Initial Pan angle
         Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
 
         // Costmap for camera FOV
         Vector2d abar(ax, ay);
         Vector2d cbar;
         double period = 2 * M_PI / pan_speed;
-        double time_forward = 2.0; // shadow region in advance
 
         for (int im = 0; im < m; im++) {
             for (int in = 0; in < n; in++) {
@@ -115,7 +121,7 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
                 Vector2d pbar = bbar - abar;
 
                 // Update cbar over time
-                double ti = now.seconds()+time_forward - (2 * M_PI / pan_speed) * std::floor((now.seconds()+time_forward) / (2 * M_PI / pan_speed));
+                double ti = now.seconds() - (2 * M_PI / pan_speed) * std::floor((now.seconds()) / (2 * M_PI / pan_speed));
                 cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
                 cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
 
@@ -139,59 +145,6 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
         }
     }
 
-    // ---------------------------CAM1-----------------------------------------
-    {
-        // Place cam0
-        double ax, ay;
-        ax = 5.0;
-        ay = -2.0;
-
-        // Camera Setting
-        double range = 3;
-        double pan_speed = 0.15;
-        double half_fov = (M_PI / 180) * 10 * 1.5;
-        double pan_init = (M_PI / 180) * 180; // Initial Pan angle
-        Vector2d cbarInit(cos(pan_init), sin(pan_init)); // Direction of camera facing
-
-        // Costmap for camera FOV
-        Vector2d abar(ax, ay);
-        Vector2d cbar;
-        double period = 2 * M_PI / pan_speed;
-        double time_forward = 2.0; // shadow region in advance
-
-        for (int im = 0; im < m; im++) {
-            for (int in = 0; in < n; in++) {
-                // if b = (wxi, wyi),
-                // find all b s.t. |b-a| < r and |theta| < r
-                double wxi, wyi;
-                time_map.mapToWorld(im, in, wxi, wyi);
-                Vector2d bbar(wxi, wyi);
-                Vector2d pbar = bbar - abar;
-
-                // Update cbar over time
-                double ti = now.seconds()+time_forward - (2 * M_PI / pan_speed) * std::floor((now.seconds()+time_forward) / (2 * M_PI / pan_speed));
-                cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
-                cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
-
-                // Calculate conditoin
-                bool inRange = pbar.norm() < range;
-                double dot_product = pbar.x() * cbar.x() + pbar.y() * cbar.y();
-                double ang = acos(dot_product / pbar.norm());
-                bool inAng = abs(ang) <= half_fov;
-
-                // Assign Cost into Costmap
-                unsigned int mxi, myi;
-                time_map.worldToMap(wxi, wyi, mxi, myi);
-
-                if (inRange && inAng) {
-                    // Extract Cost Data
-                    time_map.setCost(mxi, myi, 254);
-                } else {
-                    // time_map.setCost(mxi, myi, 0);
-                }
-            }
-        }
-    }
 
     //-------------------------------------------------------------------------
     // create collision checker
@@ -275,10 +228,14 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
 
     rrt.setGoal(goal);
 
+    std::cout << "RRT" << std::endl;
+
     int max_iter = rrt.max_iter;
     int interpolation = rrt.step_size/0.01;
     for (int i = 0; i < max_iter; i++) {
+        std::cout << "i: " << i << std::endl;
         // Extract random sample
+        std::cout << "Random Sample" << std::endl;
         // rrtc::Node* q = rrt.randomSample(start, goal, i);
         rrtc::Node* q = rrt.randomSample(wx_map_init, wy_map_init, wx_map_end, wy_map_end, start, goal, i);
         if (q != NULL) {
@@ -287,12 +244,14 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
             time_map.worldToMap(q->position.x(), q->position.y(), mqx, mqy);
 
             // Now check collision
+            std::cout << "Collision Check" << std::endl;
             bool collision_detected = collision_checker.inCollision(mqx, mqy, 0, true);
             if (collision_detected==0) {
                 // Find nearest neighbor
-                rrtc::Node* qnear = rrt.find_neighbor(q->position, i);
+                rrtc::Node* qnear = rrt.find_neighbor(q, i);
 
                 // Find new vertex qnew
+                std::cout << "Extend" << std::endl;
                 rrtc::Node* qnew = new rrtc::Node;
                 if ((q->position - qnear->position).norm() > rrt.step_size) {
                     Vector2d qnew_pos = rrt.extend(q, qnear);
@@ -313,12 +272,13 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
                 }
 
                 if (interpolated_path_collision == 0){
+                    std::cout << "Add Node" << std::endl;
                     rrt.add(qnear, qnew, i);
-                } else {
-                    // std::cout << "qnew: (" << qnew->position.x() << ", " << qnew->position.y() << "), collision cost: " << interpolated_path_collision << std::endl;
                 }
             };
         };
+
+        std::cout << "check if reached: " << rrt.reached(i) <<  std::endl;
 
         // Check if connection is reached
         if (rrt.reached(i)){
@@ -359,7 +319,10 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
                     break;
                 }
             }
+        } else {
+            std::cout << "Loop back for sampling" << std::endl;
         }
+
     }
 
     // Visualization
@@ -377,9 +340,9 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
             }
         } else {
             if (i == 0){
-                qvertex = rrt.find_neighbor(rrt.startPos, i);
+                qvertex = rrt.find_neighbor(rrt.rootStart, i);
             } else {
-                qvertex = rrt.find_neighbor(rrt.endPos, i);
+                qvertex = rrt.find_neighbor(rrt.rootGoal, i);
             }
             
         }
@@ -526,6 +489,50 @@ void RRTCPlanner::visualize_node(visualization_msgs::msg::Marker* marker, rrtc::
         visualize_node(marker, child, depth + 1);
     }
 };
+
+bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q, double currTime){
+    Vector2d cbarInit(cos(pan_init), sin(pan_init));
+
+    // Costmap for camera FOV
+    Vector2d abar(ax, ay);
+    Vector2d cbar;
+    double period = 2 * M_PI / pan_speed;
+
+    std::cout << "kek1" << std::endl;
+
+    for (int im = 0; im < m; im++) {
+        for (int in = 0; in < n; in++) {
+            std::cout << "kek" << std::endl;
+            // if b = (wxi, wyi),
+            // find all b s.t. |b-a| < r and |theta| < r
+            double wxi, wyi;
+            time_map.mapToWorld(im, in, wxi, wyi);
+            Vector2d bbar(wxi, wyi);
+            Vector2d pbar = bbar - abar;
+
+            // Distance to each grid
+            double distToGrid = sqrt(pow((wxi-q->position.x()), 2) + pow((wyi-q->position.y()), 2));
+            double timeToGrid = distToGrid/0.5;
+
+            // Update cbar over time
+            double checkTime = currTime+timeToGrid;
+            double ti = checkTime - (2 * M_PI / pan_speed) * std::floor(checkTime / (2 * M_PI / pan_speed));
+            cbar.x() = cbarInit.norm() * cos(pan_init + pan_speed * ti);
+            cbar.y() = cbarInit.norm() * sin(pan_init + pan_speed * ti);
+
+            // Calculate conditoin
+            bool inRange = pbar.norm() < range;
+            double dot_product = pbar.x() * cbar.x() + pbar.y() * cbar.y();
+            double ang = acos(dot_product / pbar.norm());
+            bool inAng = abs(ang) <= half_fov;
+
+            if (inRange && inAng) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 } // namespace nav2_straightline_planner
 

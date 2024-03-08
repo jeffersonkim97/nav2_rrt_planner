@@ -45,6 +45,8 @@ public:
     void visualize_tree(rrtc::Node* parent, string tree_name, int counter);
     void visualize_node(visualization_msgs::msg::Marker* marker, rrtc::Node* parent, int depth);
 
+    bool future_collision_checker(int m, int n, double ax, double ay, double range, double pan_speed, double half_fov, double pan_init, nav2_costmap_2d::Costmap2D time_map, rrtc::Node* q, double currTime);
+
 private:
     // Time Map Publisher
     std::shared_ptr<nav2_costmap_2d::Costmap2DPublisher> time_map_publisher_;

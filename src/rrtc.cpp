@@ -6,7 +6,7 @@ RRTC::RRTC()
 {
     // obstacles = new Obstacles;
     // RRT Loop Control
-    step_size = 0.25;
+    step_size = 0.5;
     max_iter = 1000;
 
     // Initialize Start Tree
@@ -119,14 +119,14 @@ void RRTC::proximity(Vector2d point, float radius, vector<Node*>& out_nodes, int
     
 }
 
-Node* RRTC::find_neighbor(Vector2d point, int tree_counter)
+Node* RRTC::find_neighbor(Node* point, int tree_counter)
 {
     float minDist = 1e9;
     Node* closest = NULL;
 
     if (tree_counter%2 == 0){
         for (int i = 0; i < (int)nodesStart.size(); i++) {
-            float dist = (point - nodesStart[i]->position).norm();
+            float dist = (point->position - nodesStart[i]->position).norm();
             if (dist < minDist) {
                 minDist = dist;
                 closest = nodesStart[i];
@@ -134,7 +134,7 @@ Node* RRTC::find_neighbor(Vector2d point, int tree_counter)
         }
     } else {
         for (int i = 0; i < (int)nodesGoal.size(); i++) {
-            float dist = (point - nodesGoal[i]->position).norm();
+            float dist = (point->position - nodesGoal[i]->position).norm();
             if (dist < minDist) {
                 minDist = dist;
                 closest = nodesGoal[i];
@@ -143,6 +143,24 @@ Node* RRTC::find_neighbor(Vector2d point, int tree_counter)
     }
     
     return closest;
+}
+
+bool RRTC::reachable(Node* p, Node* q, int tree_counter){
+    double dx = p->position.x() - q->position.x();
+    double dy = p->position.y() - q->position.y();
+    double dd = sqrt(dx*dx + dy*dy);
+    double dt = p->timestamp - q->timestamp;
+
+    if (dd == 0){
+        return true;
+    } else {
+        if (tree_counter%2 == 0 && dt > 0 && dd/dt <= 0.5){
+            return true;
+        } else if (tree_counter%2 == 1 && dt < 0 && dd/dt <= 0.5){
+            return true;
+        }
+    }
+    return false;
 }
 
 Vector2d RRTC::extend(Node* q, Node* qnear)
@@ -186,12 +204,13 @@ bool RRTC::reached(int tree_counter)
     if (tree_counter%2 == 0){
         for (size_t i = 0; i < nodesGoal.size(); i++){
             if ((lastStartNode->position - nodesGoal[i]->position).norm() < 1e-3) {
+                std::cout << "Distace to node: " << (lastStartNode->position - nodesGoal[i]->position).norm() << std::endl;
                 return true;
             }
         }
     } else {
         for (size_t i = 0; i < nodesStart.size(); i++){
-            if ((lastStartNode->position - nodesStart[i]->position).norm() < 1e-3) {
+            if ((lastGoalNode->position - nodesStart[i]->position).norm() < 1e-3) {
                 return true;
             }
         }
@@ -209,7 +228,7 @@ Node* RRTC::reachedNode(int tree_counter)
         }
     } else {
         for (size_t i = 0; i < nodesStart.size(); i++){
-            if ((lastStartNode->position - nodesStart[i]->position).norm() < 1e-3) {
+            if ((lastGoalNode->position - nodesStart[i]->position).norm() < 1e-3) {
                 return nodesStart[i];
             }
         }
