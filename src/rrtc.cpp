@@ -6,8 +6,9 @@ RRTC::RRTC()
 {
     // obstacles = new Obstacles;
     // RRT Loop Control
-    step_size = 1.0;
+    step_size = 0.25;
     max_iter = 1000;
+    nGoal = 10;
 
     // Initialize Start Tree
     rootStart = new Node;
@@ -22,6 +23,10 @@ RRTC::RRTC()
     nodesGoal.push_back(rootGoal);
 }
 
+double RRTC::randomSampleGoalCandidate(double minGoalTime, double maxGoalTime){
+    return std::uniform_real_distribution<double>(minGoalTime, maxGoalTime)(generator);
+}
+
 void RRTC::setStart(const geometry_msgs::msg::PoseStamped& start, double startTime)
 {
     startPos.x() = start.pose.position.x;
@@ -30,13 +35,14 @@ void RRTC::setStart(const geometry_msgs::msg::PoseStamped& start, double startTi
     rootStart->position.y() = start.pose.position.y;
     rootStart->timestamp = startTime;
 }
-void RRTC::setGoal(const geometry_msgs::msg::PoseStamped& goal, double goalTime)
+void RRTC::setGoal(const geometry_msgs::msg::PoseStamped& goal, double goalTime, int counter)
 {
     endPos.x() = goal.pose.position.x;
     endPos.y() = goal.pose.position.y;
     rootGoal->position.x() = goal.pose.position.x;
     rootGoal->position.y() = goal.pose.position.y;
     rootGoal->timestamp = goalTime;
+    rootGoalVector.push_back(rootGoal);
 }
 
 Node* RRTC::randomSample(const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter)
@@ -64,10 +70,12 @@ Node* RRTC::randomSample(const geometry_msgs::msg::PoseStamped& start, const geo
     return sample;
 }
 
-Node* RRTC::randomSample(double x1, double y1, double x2, double y2, const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, int tree_counter)
+Node* RRTC::randomSample(double x1, double y1, double x2, double y2, const geometry_msgs::msg::PoseStamped& start, const geometry_msgs::msg::PoseStamped& goal, double currTime, int tree_counter)
 {
     double sampleGoal = std::uniform_real_distribution<double>(0, 1)(generator);
     double buffer = 0.5;
+
+    double rand_time = std::uniform_real_distribution<double>(0, currTime)(generator);
 
     Vector2d point;
     if (sampleGoal <= 0.1){

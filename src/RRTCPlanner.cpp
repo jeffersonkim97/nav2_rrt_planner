@@ -227,14 +227,30 @@ nav_msgs::msg::Path RRTCPlanner::createPlan(
         std::cout << "Invalid" << std::endl;
     }
 
-    rrt.setGoal(goal, now.seconds()+100);
+    // Random sample goal region
+    double minGoalTime = 0;
+    double maxGoalTime = 100;
+    vector<double> candidateGoals;
+    for (int iGoal = 0; iGoal < rrt.nGoal; iGoal++){
+        candidateGoals.push_back(rrt.randomSampleGoalCandidate(minGoalTime, maxGoalTime));
+        rrt.setGoal(goal, candidateGoals[iGoal], iGoal);
+        // std::cout << "Sampled goal time at " << iGoal << ": " << candidateGoals[iGoal] << std::endl;
+    }
 
     int max_iter = rrt.max_iter;
     int interpolation = rrt.step_size/0.01;
     for (int i = 0; i < max_iter; i++) {
+        double currGoalTime;
+        if (i%(rrt.nGoal+1) == 0){
+            sort(candidateGoals.begin(),candidateGoals.end());
+            currGoalTime = candidateGoals[candidateGoals.size()-1];
+        } else {
+            currGoalTime = candidateGoals[i%(rrt.nGoal+1)-1];
+        }
+
         // Extract random sample
         // rrtc::Node* q = rrt.randomSample(start, goal, i);
-        rrtc::Node* q = rrt.randomSample(wx_map_init, wy_map_init, wx_map_end, wy_map_end, start, goal, i);
+        rrtc::Node* q = rrt.randomSample(wx_map_init, wy_map_init, wx_map_end, wy_map_end, start, goal, currGoalTime, i);
         if (q != NULL) {
             // Convert intermediate world coord into map coord
             unsigned int mqx, mqy;
